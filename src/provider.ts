@@ -2,10 +2,17 @@ import { tmpdir } from "node:os";
 import type { AgentProvider, AgentSession, PluginContext } from "@valethq/sdk";
 import { type CodexConfig, DEFAULT_IDLE_CLOSE_MS } from "./config";
 import { createGate, GATE_TOKEN_ENV } from "./gate";
+import { hideGlobalAgents } from "./globalAgents";
 import { createCatalog } from "./models";
 import { CodexServer } from "./server";
 import { CodexSession } from "./session";
-import { approvalPolicy, hideBuiltinTools, minRateLimitNoticePercent, sandbox } from "./settings";
+import {
+  approvalPolicy,
+  hideBuiltinTools,
+  ignoreGlobalAgentsMd,
+  minRateLimitNoticePercent,
+  sandbox,
+} from "./settings";
 import { findCodex, type Spawner, spawnCodex } from "./spawn";
 import { createRateNotices, createUsage, type UsageService } from "./usage";
 import { createUtility } from "./utility";
@@ -29,12 +36,15 @@ export function createProvider(ctx: PluginContext<CodexConfig>, spawn: Spawner =
     gate,
     log: ctx.log,
     version: ctx.plugin.version,
-    launch: () => ({
-      command: findCodex(cfg().codexPath),
-      args: ["app-server", ...(cfg().args ?? [])],
-      env: { ...process.env, ...cfg().env, [GATE_TOKEN_ENV]: gate.token },
-      cwd: tmpdir(),
-    }),
+    launch: () => {
+      const launch = {
+        command: findCodex(cfg().codexPath),
+        args: ["app-server", ...(cfg().args ?? [])],
+        env: { ...process.env, ...cfg().env, [GATE_TOKEN_ENV]: gate.token },
+        cwd: tmpdir(),
+      };
+      return ignoreGlobalAgentsMd(ctx) ? hideGlobalAgents(launch, ctx.paths.cache) : launch;
+    },
     idleCloseMs: () => cfg().idleCloseMs ?? DEFAULT_IDLE_CLOSE_MS,
     onGlobal: (method, params) => {
       if (method !== "account/rateLimits/updated") return;

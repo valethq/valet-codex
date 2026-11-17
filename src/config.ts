@@ -45,6 +45,11 @@ export interface CodexConfig {
    * already carries AGENTS.md, so Codex would send it twice. `config` can still set `project_doc_max_bytes`.
    */
   loadProjectDocs?: boolean;
+  /**
+   * Run Codex under bwrap with an empty file over CODEX_HOME's AGENTS.md / AGENTS.override.md, which Codex always
+   * loads otherwise. Needs bwrap. Also in the settings panel. Applies when the app-server next starts. Default false.
+   */
+  ignoreGlobalAgentsMd?: boolean;
   /** Reasoning summary detail streamed as reasoning. Default "auto". */
   reasoningSummary?: "auto" | "concise" | "detailed" | "none";
   /** Unsubscribe from an idle thread after this long; the next prompt resumes it. 0 disables. Default 15 min. */

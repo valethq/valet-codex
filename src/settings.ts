@@ -34,6 +34,10 @@ export function hideBuiltinTools(ctx: Ctx): boolean {
   return ctx.storage.kv.get<boolean>("hideBuiltinTools") ?? ctx.config?.hideBuiltinTools ?? false;
 }
 
+export function ignoreGlobalAgentsMd(ctx: Ctx): boolean {
+  return ctx.storage.kv.get<boolean>("ignoreGlobalAgentsMd") ?? ctx.config?.ignoreGlobalAgentsMd ?? false;
+}
+
 export function minRateLimitNoticePercent(ctx: Ctx): number {
   const v = ctx.storage.kv.get<number>("minRateLimitNoticePercent") ?? ctx.config?.minRateLimitNoticePercent;
   return typeof v === "number" && v >= 0 && v <= 100 ? v : 80;
@@ -85,6 +89,12 @@ export function registerSettings(ctx: Ctx, usage: UsageService): void {
             description:
               "Turn off Codex's own tools (shell, view_image, web search, ...) where Codex allows it, leaving valet's.",
           },
+          ignoreGlobalAgentsMd: {
+            type: "boolean",
+            title: "Ignore global .codex AGENTS.md",
+            description:
+              "Hide CODEX_HOME's AGENTS.md / AGENTS.override.md from Codex (valet's persona replaces it). Needs bwrap. Applies when the Codex app-server next starts.",
+          },
         },
       },
       get: () => ({
@@ -93,6 +103,7 @@ export function registerSettings(ctx: Ctx, usage: UsageService): void {
         utilityModel: utilityModel(ctx) ?? "",
         minRateLimitNoticePercent: minRateLimitNoticePercent(ctx),
         hideBuiltinTools: hideBuiltinTools(ctx),
+        ignoreGlobalAgentsMd: ignoreGlobalAgentsMd(ctx),
       }),
       set: (v) => {
         if (v.sandbox !== undefined && !(SANDBOXES as readonly unknown[]).includes(v.sandbox))
@@ -109,12 +120,15 @@ export function registerSettings(ctx: Ctx, usage: UsageService): void {
           throw new Error("minRateLimitNoticePercent must be a number from 0 to 100");
         if (v.hideBuiltinTools !== undefined && typeof v.hideBuiltinTools !== "boolean")
           throw new Error("hideBuiltinTools must be true or false");
+        if (v.ignoreGlobalAgentsMd !== undefined && typeof v.ignoreGlobalAgentsMd !== "boolean")
+          throw new Error("ignoreGlobalAgentsMd must be true or false");
         for (const key of [
           "sandbox",
           "approvalPolicy",
           "utilityModel",
           "minRateLimitNoticePercent",
           "hideBuiltinTools",
+          "ignoreGlobalAgentsMd",
         ] as const)
           if (v[key] !== undefined) ctx.storage.kv.set(key, v[key]);
       },

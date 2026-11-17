@@ -36,6 +36,7 @@ test("defaults, config values, and panel overrides", async () => {
     utilityModel: "gpt-6-luna-low",
     minRateLimitNoticePercent: 80,
     hideBuiltinTools: false,
+    ignoreGlobalAgentsMd: false,
   });
   await p.set?.({
     sandbox: "danger-full-access",
@@ -57,6 +58,7 @@ test("invalid values are rejected", () => {
   expect(() => p.set?.({ approvalPolicy: "sometimes" })).toThrow("approvalPolicy must be one of");
   expect(() => p.set?.({ minRateLimitNoticePercent: 120 })).toThrow("0 to 100");
   expect(() => p.set?.({ hideBuiltinTools: "yes" })).toThrow("true or false");
+  expect(() => p.set?.({ ignoreGlobalAgentsMd: 1 })).toThrow("true or false");
   expect(kv.size).toBe(0);
 });
 

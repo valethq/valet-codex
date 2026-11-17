@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolSurface } from "@valethq/sdk";
@@ -166,6 +166,40 @@ test.skipIf(!available)(
     } finally {
       h.kv.delete("hideBuiltinTools");
     }
+  },
+  60_000,
+);
+
+test.skipIf(!available || !Bun.which("bwrap"))(
+  "ignoreGlobalAgentsMd hides CODEX_HOME's AGENTS.md from the real app-server",
+  async () => {
+    const home = mkdtempSync(join(tmpdir(), "valet-codex-home-"));
+    writeFileSync(join(home, "AGENTS.md"), "GLOBAL-AGENTS-MARKER");
+    const turn = async (ignore: boolean) => {
+      const c = fakeCtx({
+        codexPath: codex,
+        env: { CODEX_HOME: home },
+        args: [
+          "-c",
+          `model_providers.fake={name="fake",base_url="${model.url}",wire_api="responses"}`,
+          "-c",
+          'model_provider="fake"',
+        ],
+        models: [{ id: "test-model" }],
+        ignoreGlobalAgentsMd: ignore,
+      });
+      try {
+        const s = await open(c, { sessionId: `global-${ignore}`, model: "test-model", cwd: work, tools });
+        const events = await collect(s.prompt(input("hello"), ac()));
+        expect(textOf(events)).toBe("pong");
+        await s.close();
+        return JSON.stringify(model.requests.at(-1));
+      } finally {
+        await c.dispose();
+      }
+    };
+    expect(await turn(false)).toContain("GLOBAL-AGENTS-MARKER");
+    expect(await turn(true)).not.toContain("GLOBAL-AGENTS-MARKER");
   },
   60_000,
 );
