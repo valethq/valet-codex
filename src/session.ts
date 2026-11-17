@@ -31,6 +31,8 @@ export interface SessionInit {
   catalog: ModelCatalog;
   log: Logger;
   readBlob(blobId: string): Promise<Uint8Array>;
+  /** valet's persona preamble per thread, kept so every start or resume sends the same developer instructions. */
+  preamble: { get(threadId: string): string | undefined; set(threadId: string, text: string): void };
   /** The thread id changed because the old one could not be resumed. */
   onThread(threadId: string): void;
   onClose(): void;
@@ -56,6 +58,10 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export class CodexSession implements AgentSession, ThreadListener {
   private threadId = "";
   private loaded = false;
+  /** A turn was sent, so the thread has a rollout and can be resumed. */
+  private used = false;
+  private persona?: string;
+  private pendingPersona?: string;
   private model: string;
   private effort?: Effort;
   private valetNames = new Set<string>();
@@ -81,14 +87,16 @@ export class CodexSession implements AgentSession, ThreadListener {
     return this.threadId;
   }
 
-  private async load(resume: string | undefined): Promise<void> {
+  private async load(resume: string | undefined, persona?: string): Promise<void> {
     const { server, gate, log } = this.init;
     const conn = await server.connect();
     if (!conn.trust)
       throw new Error("codex did not load valet's tool gate hook, so valet will not start a thread");
     const tools: ToolSpec[] = this.init.tools.list();
     this.valetNames = new Set(tools.map((t) => codexName(t.name)));
+    const text = persona ?? (resume ? this.init.preamble.get(resume) : undefined);
     const params = threadParams({
+      persona: text,
       cfg: this.init.cfg(),
       cwd: this.init.cwd,
       model: this.model,
@@ -106,6 +114,7 @@ export class CodexSession implements AgentSession, ThreadListener {
           ...params,
         });
         id = r.thread.id;
+        this.used = true;
       } catch (e) {
         log.warn("codex thread could not be resumed, starting a new one", {
           resumeId: resume,
@@ -113,10 +122,13 @@ export class CodexSession implements AgentSession, ThreadListener {
         });
       }
     }
+    if (!id) this.used = false;
     id ??= (await conn.rpc.request<{ thread: { id: string } }>("thread/start", params)).thread.id;
     const changed = this.threadId !== "" && id !== this.threadId;
     this.threadId = id;
     this.loaded = true;
+    this.persona = text;
+    if (text) this.init.preamble.set(id, text);
     server.attach(id, this);
     gate.register(id, {
       tools: this.init.tools,
@@ -187,24 +199,25 @@ export class CodexSession implements AgentSession, ThreadListener {
     signal: AbortSignal,
   ): AsyncIterable<AgentEvent> {
     let items: unknown[];
+    if (input.preamble) this.pendingPersona = input.preamble;
     try {
-      items = await userInput(input, this.init.readBlob);
+      items = await userInput(input.content, this.init.readBlob);
     } catch (e) {
       yield { type: "finish", reason: "error", error: message(e) };
       return;
     }
     const summary = this.init.cfg().reasoningSummary ?? "auto";
-    yield* this.run(
-      (rpc) =>
-        rpc.request("turn/start", {
-          threadId: this.threadId,
-          input: items,
-          model: this.model,
-          ...(this.effort && { effort: this.effort }),
-          summary,
-        }),
-      signal,
-    );
+    yield* this.run(async (rpc) => {
+      const r = await rpc.request("turn/start", {
+        threadId: this.threadId,
+        input: items,
+        model: this.model,
+        ...(this.effort && { effort: this.effort }),
+        summary,
+      });
+      this.used = true;
+      return r;
+    }, signal);
   }
 
   /** Codex compacts as a turn of its own and reports it as a `contextCompaction` item. */
@@ -215,7 +228,16 @@ export class CodexSession implements AgentSession, ThreadListener {
   }
 
   private async ensureLoaded() {
-    if (!this.loaded) {
+    const next = this.pendingPersona;
+    this.pendingPersona = undefined;
+    if (next && next !== this.persona) {
+      // Developer instructions are set when a thread starts or resumes. A thread with no turn has no rollout to
+      // resume, so it is replaced; one with turns is resumed with the new text.
+      const old = this.threadId;
+      await this.unload();
+      await this.load(this.used ? old : undefined, next);
+      if (this.threadId !== old) this.init.gate.unregister(old);
+    } else if (!this.loaded) {
       const before = this.threadId;
       await this.load(this.threadId);
       if (this.threadId !== before)

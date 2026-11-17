@@ -105,7 +105,7 @@ test("text arrives whole when Codex sends no deltas; back-to-back messages get a
   expect(textOf(await collect(s.prompt(input("hi"), ac())))).toBe("one\n\ntwo");
 });
 
-test("preamble sections and images become separate input items", async () => {
+test("images go inline and text stays a text item", async () => {
   const codex = new FakeCodex();
   const path = `${import.meta.dir}/fixtures/dot.png`;
   await Bun.write(path, new Uint8Array([137, 80, 78, 71]));
@@ -114,7 +114,6 @@ test("preamble sections and images become separate input items", async () => {
   await collect(
     s.prompt(
       {
-        preamble: "## Persona\nHelper\n## Memory\nnone",
         content: [
           { type: "text", text: "look" },
           { type: "image", mime: "image/png", blobId: "img" },
@@ -124,11 +123,45 @@ test("preamble sections and images become separate input items", async () => {
     ),
   );
   expect((codex.calls("turn/start")[0] as { input: unknown }).input).toEqual([
-    { type: "text", text: "## Persona\nHelper", text_elements: [] },
-    { type: "text", text: "## Memory\nnone", text_elements: [] },
     { type: "text", text: "look", text_elements: [] },
     { type: "image", url: "data:image/png;base64,iVBORw==" },
   ]);
+});
+
+test("the preamble becomes the thread's developer instructions, kept for every relaunch", async () => {
+  const codex = new FakeCodex();
+  h = fakeCtx({ developerInstructions: "Be brief.", idleCloseMs: 0 }, codex.spawn);
+  const s = await open(h);
+  await collect(s.prompt(input("hi", "## Persona\nHelper"), ac()));
+  const starts = codex.calls("thread/start");
+  expect(starts).toHaveLength(2);
+  expect(starts[0]?.developerInstructions).toBe("Be brief.");
+  expect(starts[1]?.developerInstructions).toBe("Be brief.\n\n## Persona\nHelper");
+  expect(s.resumeId).toBe("thr_2");
+  expect(h.state["s1:codex"]).toEqual({ resumeId: "thr_2" });
+  expect(h.kv.get("preamble:thr_2")).toBe("## Persona\nHelper");
+  expect((codex.calls("turn/start")[0] as { input: unknown }).input).toEqual([
+    { type: "text", text: "hi", text_elements: [] },
+  ]);
+
+  await collect(s.prompt(input("again", "## Persona\nHelper"), ac()));
+  expect(codex.calls("thread/start")).toHaveLength(2);
+
+  const again = await open(h, { resumeId: "thr_2" });
+  await collect(again.prompt(input("after restart"), ac()));
+  expect(codex.calls("thread/resume").at(-1)?.developerInstructions).toBe("Be brief.\n\n## Persona\nHelper");
+});
+
+test("codex does not load the workspace AGENTS.md unless asked", async () => {
+  const codex = new FakeCodex();
+  h = fakeCtx({}, codex.spawn);
+  await open(h);
+  const on = fakeCtx({ loadProjectDocs: true }, codex.spawn);
+  await open(on);
+  const cfg = (i: number) => (codex.calls("thread/start")[i] as { config: Record<string, unknown> }).config;
+  expect(cfg(0).project_doc_max_bytes).toBe(0);
+  expect(cfg(1).project_doc_max_bytes).toBeUndefined();
+  await on.dispose();
 });
 
 test("one app-server serves every session; notifications go to their own thread", async () => {

@@ -73,6 +73,10 @@ export function createProvider(ctx: PluginContext<CodexConfig>, spawn: Spawner =
             hideBuiltinTools: hideBuiltinTools(ctx),
           }),
           catalog,
+          preamble: {
+            get: (id) => ctx.storage.kv.get<string>(`preamble:${id}`),
+            set: (id, text) => ctx.storage.kv.set(`preamble:${id}`, text),
+          },
           log: ctx.log,
           readBlob: (blobId) => Bun.file(ctx.store.blobs.path(blobId)).bytes(),
           onThread: save,

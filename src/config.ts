@@ -38,8 +38,13 @@ export interface CodexConfig {
   denyTools?: string[];
   /** Turn off Codex's own tools where Codex allows it, leaving valet's. Also in the settings panel. Default false. */
   hideBuiltinTools?: boolean;
-  /** Static developer instructions for every thread (`developerInstructions`). Part of the cached prefix. */
+  /** Static developer instructions for every thread (`developerInstructions`), ahead of valet's persona. Part of the cached prefix. */
   developerInstructions?: string;
+  /**
+   * Let Codex load the workspace's AGENTS.md itself. Default false (`project_doc_max_bytes = 0`): valet's persona
+   * already carries AGENTS.md, so Codex would send it twice. `config` can still set `project_doc_max_bytes`.
+   */
+  loadProjectDocs?: boolean;
   /** Reasoning summary detail streamed as reasoning. Default "auto". */
   reasoningSummary?: "auto" | "concise" | "detailed" | "none";
   /** Unsubscribe from an idle thread after this long; the next prompt resumes it. 0 disables. Default 15 min. */

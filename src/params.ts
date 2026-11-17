@@ -42,6 +42,8 @@ export interface ThreadOptions {
   tools: readonly ToolSpec[];
   gate: Gate;
   trust?: { key: string; hash: string };
+  /** valet's persona preamble for the thread, sent as developer instructions after the static ones. */
+  persona?: string;
 }
 
 /**
@@ -57,13 +59,17 @@ export function threadParams(o: ThreadOptions): Obj {
     hooks: o.gate.hooks(o.trust),
     ...(o.hideBuiltinTools && { web_search: "disabled" }),
   };
+  const developerInstructions = [o.cfg.developerInstructions, o.persona].filter((t) => !!t).join("\n\n");
   return {
     cwd: o.cwd,
     model: o.model,
     approvalPolicy: o.approvalPolicy,
     sandbox: o.sandbox,
-    config: deepMerge(o.cfg.config ?? {}, ours),
-    ...(o.cfg.developerInstructions && { developerInstructions: o.cfg.developerInstructions }),
+    config: deepMerge(
+      deepMerge(o.cfg.loadProjectDocs ? {} : { project_doc_max_bytes: 0 }, o.cfg.config ?? {}),
+      ours,
+    ),
+    ...(developerInstructions && { developerInstructions }),
     dynamicTools: dynamicTools(o.tools),
     serviceName: "valet",
   };
@@ -71,20 +77,19 @@ export function threadParams(o: ThreadOptions): Obj {
 
 export type UserInput = { type: "text"; text: string; text_elements: [] } | { type: "image"; url: string };
 
-/** Preamble sections ("## ...") become separate text items ahead of the prompt; images go inline as data URLs. */
+/** Text goes in as text items, images inline as data URLs. The preamble is not here: it is the thread's developer instructions. */
 export async function userInput(
-  input: { content: ModelContent[]; preamble?: string },
+  content: ModelContent[],
   readBlob: (blobId: string) => Promise<Uint8Array>,
 ): Promise<UserInput[]> {
   const textItem = (text: string): UserInput => ({ type: "text", text, text_elements: [] });
-  const head = (input.preamble?.split(/\n(?=## )/) ?? []).filter((t) => !!t).map(textItem);
-  const body = await Promise.all(
-    input.content.map(async (c): Promise<UserInput | undefined> => {
+  const items = await Promise.all(
+    content.map(async (c): Promise<UserInput | undefined> => {
       if (c.type === "text") return textItem(c.text);
       if (c.type !== "image") return undefined;
       const data = Buffer.from(await readBlob(c.blobId)).toString("base64");
       return { type: "image", url: `data:${c.mime};base64,${data}` };
     }),
   );
-  return [...head, ...body.filter((b): b is UserInput => b !== undefined)];
+  return items.filter((b): b is UserInput => b !== undefined);
 }
