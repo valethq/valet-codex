@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "id": "valet-codex",
+  "name": "Codex",
+  "version": "0.1.0",
+  "description": "inference@1 agent provider codex over the Codex CLI app-server.",
+  "valet": "^0.1.0",
+  "main": "./src/index.ts",
+  "provides": ["inference@1", "settings@1"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "codexPath": { "type": "string" },
+      "args": { "type": "array", "items": { "type": "string" } },
+      "env": { "type": "object", "additionalProperties": { "type": "string" } },
+      "config": { "type": "object" },
+      "sandbox": { "type": "string", "enum": ["read-only", "workspace-write", "danger-full-access"] },
+      "approvalPolicy": { "type": "string", "enum": ["untrusted", "on-request", "never"] },
+      "denyTools": { "type": "array", "items": { "type": "string" } },
+      "hideBuiltinTools": { "type": "boolean" },
+      "developerInstructions": { "type": "string" },
+      "reasoningSummary": { "type": "string", "enum": ["auto", "concise", "detailed", "none"] },
+      "idleCloseMs": { "type": "number" },
+      "minRateLimitNoticePercent": { "type": "number" },
+      "utilityModel": { "type": "string" },
+      "models": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "contextWindow": { "type": "number" },
+            "maxOutputTokens": { "type": "number" },
+            "efforts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+              }
+            },
+            "input": { "type": "array", "items": { "type": "string", "enum": ["text", "image"] } }
+          }
+        }
+      }
+    }
+  }
+}
