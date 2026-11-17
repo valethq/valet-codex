@@ -599,3 +599,8 @@ test("close unsubscribes; dispose stops the app-server", async () => {
   h = undefined;
   expect(codex.proc.dead).toBe(true);
 });
+
+test("the provider names the OpenAI logo for UIs", () => {
+  h = fakeCtx({}, new FakeCodex().spawn);
+  expect((h.provider as { icon?: string }).icon).toBe("openai");
+});

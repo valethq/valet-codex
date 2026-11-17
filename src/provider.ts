@@ -58,10 +58,12 @@ export function createProvider(ctx: PluginContext<CodexConfig>, spawn: Spawner =
     ctx.log,
   );
   const catalog = createCatalog(cfg, async () => (await server.connect()).rpc.request("model/list", {}));
-  const provider: AgentProvider = {
+  // `& { icon }` until @valethq/sdk 0.3.0 (ProviderBase.icon) is published.
+  const provider: AgentProvider & { readonly icon: string } = {
     kind: "agent",
     id: PROVIDER_KEY,
     label: "Codex",
+    icon: "openai",
     listModels: () => catalog.list(),
     utility: createUtility(ctx, server),
     async open(opts): Promise<AgentSession> {
