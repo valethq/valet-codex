@@ -1,18 +1,44 @@
 import { expect, test } from "bun:test";
-import { createCatalog } from "../src/models";
+import { createCatalog, fromCodex, resolveModel } from "../src/models";
 
-test("custom models follow the listed ones and keep their friendly name", async () => {
-  const catalog = createCatalog(
-    () => ({ models: [{ id: "a", name: "A" }] }),
-    async () => ({}),
-    Date.now,
-    () => [
-      { id: "a", name: "Dup" },
-      { id: "mine", name: "Mine" },
-    ],
-  );
-  expect((await catalog.list()).map((m) => [m.id, m.name])).toEqual([
-    ["a", "A"],
-    ["mine", "Mine"],
+test("fromCodex keeps known efforts and takes the first service tier as fast mode", () => {
+  expect(
+    fromCodex({
+      data: [
+        {
+          id: "m",
+          supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "weird" }],
+          defaultReasoningEffort: "low",
+          serviceTiers: [{ id: "flex" }],
+          defaultServiceTier: null,
+        },
+      ],
+    }),
+  ).toEqual([
+    {
+      id: "m",
+      name: "m",
+      efforts: ["low"],
+      defaultEffort: "low",
+      input: ["text", "image"],
+      fastTier: "flex",
+    },
   ]);
+});
+
+test("the catalog knows each model's fast tier, defaulting to priority", async () => {
+  const catalog = createCatalog(
+    () => ({ models: [{ id: "a", fastTier: "turbo" }, { id: "b" }] }),
+    async () => ({}),
+  );
+  expect((await catalog.list()).map((m) => [m.id, m.fast ?? false])).toEqual([
+    ["a", true],
+    ["b", false],
+  ]);
+  expect(catalog.fastTier("a")).toBe("turbo");
+  expect(catalog.fastTier("b")).toBe("priority");
+});
+
+test("resolveModel still splits the utility model's effort", () => {
+  expect(resolveModel("gpt-6-luna-low")).toEqual({ model: "gpt-6-luna", effort: "low" });
 });

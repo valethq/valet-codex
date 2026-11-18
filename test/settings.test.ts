@@ -1,15 +1,46 @@
 import { expect, test } from "bun:test";
-import type { SettingsPanel } from "@valethq/sdk";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { PluginContext, SettingsPanel } from "@valethq/sdk";
 import type { CodexConfig } from "../src/config";
-import { registerSettings } from "../src/settings";
+import {
+  approvalPolicy,
+  hideBuiltinTools,
+  ignoreGlobalAgentsMd,
+  minRateLimitNoticePercent,
+  registerSettings,
+  sandbox,
+  utilityModel,
+} from "../src/settings";
 import type { UsageService } from "../src/usage";
 
-function panel(config: CodexConfig = {}) {
-  const kv = new Map<string, unknown>();
+const ctxOf = (config: CodexConfig) => ({ config }) as unknown as PluginContext<CodexConfig>;
+const props = JSON.parse(readFileSync(join(import.meta.dir, "..", "manifest.json"), "utf8")).configSchema
+  .properties as Record<string, { default?: unknown }>;
+
+test("accessors fall back to the defaults the manifest declares", () => {
+  const ctx = ctxOf({});
+  expect(sandbox(ctx)).toBe(props.sandbox?.default as "workspace-write");
+  expect(approvalPolicy(ctx)).toBe(props.approvalPolicy?.default as "on-request");
+  expect(utilityModel(ctx)).toBe(props.utilityModel?.default as string);
+  expect(hideBuiltinTools(ctx)).toBe(props.hideBuiltinTools?.default as boolean);
+  expect(ignoreGlobalAgentsMd(ctx)).toBe(props.ignoreGlobalAgentsMd?.default as boolean);
+  expect(minRateLimitNoticePercent(ctx)).toBe(props.minRateLimitNoticePercent?.default as number);
+  expect(props.customModels).toBeUndefined();
+});
+
+test("config values win; values outside the enums fall back; an empty utility model is off", () => {
+  const ctx = ctxOf({ sandbox: "read-only", approvalPolicy: "never", utilityModel: "" });
+  expect(sandbox(ctx)).toBe("read-only");
+  expect(approvalPolicy(ctx)).toBe("never");
+  expect(utilityModel(ctx)).toBeUndefined();
+  expect(sandbox(ctxOf({ sandbox: "yolo" as never }))).toBe("workspace-write");
+});
+
+test("the settings page carries usage: view and refresh action, no form", async () => {
   let provided: SettingsPanel | undefined;
   const ctx = {
-    config,
-    storage: { kv: { get: (k: string) => kv.get(k), set: (k: string, v: unknown) => void kv.set(k, v) } },
+    config: {},
     scopes: {
       define() {},
       provide: (_name: string, p: SettingsPanel) => {
@@ -24,60 +55,8 @@ function panel(config: CodexConfig = {}) {
     update() {},
   };
   registerSettings(ctx as never, usage);
-  if (!provided) throw new Error("no panel");
-  return { p: provided, kv, refreshed: () => refreshed };
-}
-
-test("defaults, config values, and panel overrides", async () => {
-  const { p } = panel({ sandbox: "read-only", utilityModel: "gpt-6-luna-low" });
-  expect(await p.get?.()).toEqual({
-    sandbox: "read-only",
-    approvalPolicy: "on-request",
-    utilityModel: "gpt-6-luna-low",
-    customModels: [],
-    minRateLimitNoticePercent: 80,
-    hideBuiltinTools: false,
-    ignoreGlobalAgentsMd: false,
-  });
-  await p.set?.({
-    sandbox: "danger-full-access",
-    approvalPolicy: "never",
-    utilityModel: "",
-    hideBuiltinTools: true,
-  });
-  expect(await p.get?.()).toMatchObject({
-    sandbox: "danger-full-access",
-    approvalPolicy: "never",
-    utilityModel: "",
-    hideBuiltinTools: true,
-  });
-});
-
-test("invalid values are rejected", () => {
-  const { p, kv } = panel();
-  expect(() => p.set?.({ sandbox: "yolo" })).toThrow("sandbox must be one of");
-  expect(() => p.set?.({ approvalPolicy: "sometimes" })).toThrow("approvalPolicy must be one of");
-  expect(() => p.set?.({ minRateLimitNoticePercent: 120 })).toThrow("0 to 100");
-  expect(() => p.set?.({ hideBuiltinTools: "yes" })).toThrow("true or false");
-  expect(() => p.set?.({ ignoreGlobalAgentsMd: 1 })).toThrow("true or false");
-  expect(kv.size).toBe(0);
-});
-
-test("the view shows usage and the refresh action forces a read", async () => {
-  const { p, refreshed } = panel();
-  expect(await p.view?.()).toEqual([{ type: "text", text: "usage" }]);
-  await p.actions?.refresh?.({});
-  expect(refreshed()).toBe(1);
-});
-
-test("customModels round-trips and rejects entries without a model name", async () => {
-  const { p } = panel();
-  await p.set?.({
-    customModels: [
-      { id: " my-model ", name: "Mine" },
-      { id: "bare", name: "" },
-    ],
-  });
-  expect((await p.get?.())?.customModels).toEqual([{ id: "my-model", name: "Mine" }, { id: "bare" }]);
-  expect(() => p.set?.({ customModels: [{ id: "" }] })).toThrow("customModels");
+  expect(provided?.schema).toBeUndefined();
+  expect(await provided?.view?.()).toEqual([{ type: "text", text: "usage" }]);
+  await provided?.actions?.refresh?.({});
+  expect(refreshed).toBe(1);
 });

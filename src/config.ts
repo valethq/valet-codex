@@ -13,15 +13,14 @@ export interface ModelConfig {
   name?: string;
   contextWindow?: number;
   maxOutputTokens?: number;
-  /** Effort levels offered as picker entries ("<id>-<effort>"). Unset = bare id only. */
+  /** Effort levels the model takes. Unset = none to pick. */
   efforts?: Effort[];
+  defaultEffort?: Effort;
   input?: ("text" | "image")[];
-}
-
-/** A model the user adds by hand; `id` goes to the harness unchanged, `name` is the picker label. */
-export interface CustomModel {
-  id: string;
-  name?: string;
+  /** The service tier that is the model's fast mode, e.g. "priority". Unset = no fast mode. */
+  fastTier?: string;
+  /** The model runs on `fastTier` unless a selection turns fast mode off. */
+  fastByDefault?: boolean;
 }
 
 export interface CodexConfig {
@@ -36,13 +35,13 @@ export interface CodexConfig {
    * e.g. { model_provider: "my-proxy" }. Static per plugin config: it is part of the cached prefix.
    */
   config?: Record<string, unknown>;
-  /** Sandbox for model-run commands. Also a settings panel that overrides it. Default "workspace-write". */
+  /** Sandbox for model-run commands. Default "workspace-write". */
   sandbox?: Sandbox;
   /** When Codex asks before running something. Requests go to valet as permission events. Default "on-request". */
   approvalPolicy?: ApprovalPolicy;
   /** Tool names the gate always denies, as Codex's hooks name them ("Bash", "apply_patch", "mcp__srv__tool", ...). */
   denyTools?: string[];
-  /** Turn off Codex's own tools where Codex allows it, leaving valet's. Also in the settings panel. Default false. */
+  /** Turn off Codex's own tools where Codex allows it, leaving valet's. Default false. */
   hideBuiltinTools?: boolean;
   /** Static developer instructions for every thread (`developerInstructions`), ahead of valet's persona. Part of the cached prefix. */
   developerInstructions?: string;
@@ -53,21 +52,19 @@ export interface CodexConfig {
   loadProjectDocs?: boolean;
   /**
    * Run Codex under bwrap with an empty file over CODEX_HOME's AGENTS.md / AGENTS.override.md, which Codex always
-   * loads otherwise. Needs bwrap. Also in the settings panel. Applies when the app-server next starts. Default false.
+   * loads otherwise. Needs bwrap. Applies when the app-server next starts. Default false.
    */
   ignoreGlobalAgentsMd?: boolean;
   /** Reasoning summary detail streamed as reasoning. Default "auto". */
   reasoningSummary?: "auto" | "concise" | "detailed" | "none";
   /** Unsubscribe from an idle thread after this long; the next prompt resumes it. 0 disables. Default 15 min. */
   idleCloseMs?: number;
-  /** Hide "approaching limit" warnings below this percent used (0-100). Also in the settings panel. Default 80. */
+  /** Hide "approaching limit" warnings below this percent used (0-100). Default 80. */
   minRateLimitNoticePercent?: number;
   /** Model for small side jobs such as session naming. Empty string turns them off. */
   utilityModel?: string;
   /** Override the model list. Unset reads `model/list` from Codex. */
   models?: ModelConfig[];
-  /** Extra picker entries added to the model list. Also in the settings panel. */
-  customModels?: CustomModel[];
 }
 
 export const DEFAULT_UTILITY_MODEL = "gpt-6-luna-low";

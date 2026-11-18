@@ -451,13 +451,31 @@ test("compact runs thread/compact/start and reports the compaction", async () =>
   expect(events.at(-1)).toEqual({ type: "finish", reason: "stop" });
 });
 
-test("setModel applies to the next turn", async () => {
+test("setModel applies to the next turn: effort, and fast mode as the service tier", async () => {
   const codex = new FakeCodex();
   h = fakeCtx({}, codex.spawn);
   const s = await open(h);
-  await s.setModel?.("gpt-6-luna-max");
+  await s.setModel?.("gpt-6-luna", { effort: "max", fast: true });
   await collect(s.prompt(input("go"), ac()));
-  expect(codex.calls("turn/start")[0]).toMatchObject({ model: "gpt-6-luna", effort: "max" });
+  expect(codex.calls("turn/start")[0]).toMatchObject({
+    model: "gpt-6-luna",
+    effort: "max",
+    serviceTier: "priority",
+  });
+  await s.setModel?.("gpt-6-luna", { fast: false });
+  await collect(s.prompt(input("again"), ac()));
+  const second = codex.calls("turn/start")[1] as Record<string, unknown>;
+  expect(second.serviceTier).toBeNull();
+  expect("effort" in second).toBe(false);
+});
+
+test("open sends the fast tier with the thread, and nothing when fast mode is unset", async () => {
+  const codex = new FakeCodex();
+  h = fakeCtx({}, codex.spawn);
+  await open(h, { fast: true });
+  expect(codex.calls("thread/start")[0]).toMatchObject({ serviceTier: "priority" });
+  await open(h, { sessionId: "s2" });
+  expect("serviceTier" in (codex.calls("thread/start")[1] as Record<string, unknown>)).toBe(false);
 });
 
 test("when the app-server dies mid-turn the turn fails and the next prompt resumes the thread", async () => {
@@ -511,11 +529,10 @@ test("rate-limit updates become notices in running turns, once per window", asyn
   ]);
 });
 
-test("hideBuiltinTools turns Codex's tool features off; the panel overrides config", async () => {
+test("hideBuiltinTools turns Codex's tool features off; a settings change applies at the next thread", async () => {
   const codex = new FakeCodex();
   h = fakeCtx({ hideBuiltinTools: false, sandbox: "read-only" }, codex.spawn);
-  h.kv.set("hideBuiltinTools", true);
-  h.kv.set("approvalPolicy", "never");
+  h.setConfig({ hideBuiltinTools: true, approvalPolicy: "never" });
   await open(h);
   const p = codex.calls("thread/start")[0] as {
     sandbox: string;
@@ -533,7 +550,7 @@ test("hideBuiltinTools turns Codex's tool features off; the panel overrides conf
   expect(p.config.web_search as unknown).toBe("disabled");
 });
 
-test("listModels reads model/list and offers effort entries; turns teach the context window", async () => {
+test("listModels reads model/list: efforts, default effort and the fast tier; turns teach the context window", async () => {
   const codex = new FakeCodex();
   codex.models = [
     {
@@ -541,16 +558,27 @@ test("listModels reads model/list and offers effort entries; turns teach the con
       displayName: "GPT-6.1-Sol",
       hidden: false,
       supportedReasoningEfforts: [{ reasoningEffort: "low" }, { reasoningEffort: "high" }],
+      defaultReasoningEffort: "low",
       inputModalities: ["text", "image"],
+      serviceTiers: [{ id: "priority", name: "Fast" }],
+      defaultServiceTier: "priority",
     },
+    { id: "plain", displayName: "Plain", hidden: false, supportedReasoningEfforts: [] },
     { id: "secret", displayName: "Hidden", hidden: true, supportedReasoningEfforts: [] },
   ];
   h = fakeCtx({}, codex.spawn);
   const before = await h.provider.listModels();
   expect(before.map((m) => [m.id, m.name, m.contextWindow])).toEqual([
-    ["gpt-6.1-sol-low", "GPT-6.1-Sol (low)", 272_000],
-    ["gpt-6.1-sol-high", "GPT-6.1-Sol (high)", 272_000],
+    ["gpt-6.1-sol", "GPT-6.1-Sol", 272_000],
+    ["plain", "Plain", 272_000],
   ]);
+  expect(before[0]).toMatchObject({
+    efforts: ["low", "high"],
+    defaultEffort: "low",
+    fast: true,
+    fastByDefault: true,
+  });
+  expect(before[1]?.fast).toBeUndefined();
   const s = await open(h);
   await collect(s.prompt(input("go"), ac()));
   expect((await h.provider.listModels())[0]?.contextWindow).toBe(400_000);

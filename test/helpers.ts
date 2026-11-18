@@ -40,8 +40,11 @@ export function fakeCtx(config: CodexConfig, spawn?: Spawner, blobs: Record<stri
   const logger = (level: string) => (msg: string, data?: Record<string, unknown>) =>
     logs.push({ level, msg, data });
   const http = httpHost();
+  let current = config;
   const ctx = {
-    config,
+    get config() {
+      return current;
+    },
     plugin: { version: "0.1.0" },
     paths: { cache: "/tmp", data: "/tmp", valetHome: "/tmp" },
     http: http.host,
@@ -77,6 +80,10 @@ export function fakeCtx(config: CodexConfig, spawn?: Spawner, blobs: Record<stri
     logs,
     kv,
     ctx,
+    /** What core does on a settings save: the new block replaces ctx.config. */
+    setConfig: (patch: Partial<CodexConfig>) => {
+      current = { ...current, ...patch };
+    },
     dispose: async () => {
       await p.dispose();
       http.stop();
@@ -108,7 +115,8 @@ export const open = (h: ReturnType<typeof fakeCtx>, extra: Record<string, unknow
   h.provider.open({
     sessionId: "s1",
     cwd: "/tmp",
-    model: "gpt-6.1-sol-high",
+    model: "gpt-6.1-sol",
+    effort: "high",
     tools: noTools,
     signal: new AbortController().signal,
     ...extra,

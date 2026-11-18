@@ -12,7 +12,7 @@ Imports `@valethq/sdk` only and has no runtime dependencies: it spawns the insta
 - **One Codex thread per valet session.** The thread id is the session's `resumeId`. `open()` resumes it (`thread/resume`) or starts a new one; a thread that can't be resumed is replaced, and valet sends the preamble again.
 - **Persona in developer instructions.** valet's preamble goes in `developerInstructions` on `thread/start` / `thread/resume` (after the static `developerInstructions` option), not in the user message, so the identical persona sits ahead of the per-chat environment context and user text and new chats can share the cached prefix. Those fields only exist on start and resume, so a thread without turns is replaced when the preamble arrives, and the preamble is kept in plugin kv (`preamble:<threadId>`) and sent again on every resume (idle unload, valet restart). Codex's own AGENTS.md loading is off (`project_doc_max_bytes = 0`) because the preamble already carries it; set `loadProjectDocs` to turn it back on. Codex has no setting to skip the global `CODEX_HOME/AGENTS.md` (or `AGENTS.override.md`): `ignoreGlobalAgentsMd` runs the app-server under `bwrap --dev-bind / /` with an empty file mounted read-only over whichever of those exists, which Codex then skips. It needs `bwrap` and fails the start without it; with neither file present Codex starts as usual.
 - **Turns** are `turn/start`; notifications for the thread become valet events (`item/agentMessage/delta` -> text, reasoning summaries -> reasoning, items -> tool parts, `thread/tokenUsage/updated` -> usage). Codex's prompt cache key is the thread id, so a session keeps its cache across turns and resumes.
-- **Models.** `listModels` reads `model/list` (cached 5 min) and offers `<model>-<effort>` entries for each supported effort. `setModel` takes effect on the next turn. Codex doesn't report context windows in `model/list`; the default 272k is replaced by the window the first turn reports.
+- **Models.** `listModels` reads `model/list` (cached 5 min) and lists each model once with its `efforts` and `fast` (from Codex's service tiers). Effort and fast mode arrive as model options (`open({ effort, fast })`, `setModel(model, { effort, fast })`) and go on the next `turn/start` as `reasoningEffort` / `serviceTier`; nothing is encoded in the model id. Codex doesn't report context windows in `model/list`; the default 272k is replaced by the window the first turn reports.
 - **Abort** sends `turn/interrupt`. A turn the caller stopped reading is interrupted before the next one starts. Tool items Codex leaves open on an interrupt are closed as cancelled.
 - **Compaction** (`compact()`) is `thread/compact/start`; Codex's `contextCompaction` item (manual or automatic) drives `compaction-start` / `compaction-end`. Codex takes no compaction instructions, so valet's are dropped.
 - **Idle threads** are unsubscribed after `idleCloseMs` (default 15 min) and resumed by the next prompt.
@@ -35,32 +35,35 @@ Imports `@valethq/sdk` only and has no runtime dependencies: it spawns the insta
 
 ## Plan usage
 
-The `valet-codex` settings panel shows the plan's rate-limit windows (session, weekly, and per-model limits) as meters with an even-pace marker, plus credits when the plan has them. It reads `account/read` and `account/rateLimits/read` over the shared app-server (no model turn), caches for a minute, retries a failure after 5 minutes, and folds in the `account/rateLimits/updated` snapshots Codex sends after each response. Those snapshots also produce chat notices: a warning once per window period above `minRateLimitNoticePercent` (default 80), and an error with the reset time when a limit is reached.
+The plugin's settings page shows the plan's rate-limit windows (a view-only `settings` panel above the config form) (session, weekly, and per-model limits) as meters with an even-pace marker, plus credits when the plan has them. It reads `account/read` and `account/rateLimits/read` over the shared app-server (no model turn), caches for a minute, retries a failure after 5 minutes, and folds in the `account/rateLimits/updated` snapshots Codex sends after each response. Those snapshots also produce chat notices: a warning once per window period above `minRateLimitNoticePercent` (default 80), and an error with the reset time when a limit is reached.
 
 Logins without plan limits (API key, custom provider, nobody signed in) get a one-line explanation. **The ChatGPT path is untested**: no ChatGPT account was signed in while building this. It was written against the 0.169.0 protocol types (`RateLimitSnapshot`: `primary` / `secondary` windows with `usedPercent`, `windowDurationMins`, `resetsAt` in epoch seconds), and the parser treats every field as optional. Run the live test with a ChatGPT login to see real data.
 
-## Config (`plugins.valet-codex.config`)
+## Config
 
-| Key                         | Meaning                                                                                                                                          |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `codexPath`                 | The `codex` binary. Default: `codex` on PATH, then `~/.local/bin/codex`.                                                                         |
-| `args`                      | Extra `codex app-server` arguments, e.g. `["-c", "model_provider=\"my-proxy\""]`. Applied when the app-server starts.                            |
-| `env`                       | Extra environment for the app-server, e.g. `{ "CODEX_HOME": "/srv/codex" }`.                                                                     |
-| `config`                    | Codex config sent with every thread (nested tables, as in `config.toml`). Part of the cached prefix: keep it static.                             |
-| `sandbox`                   | `read-only` / `workspace-write` (default) / `danger-full-access`. Also in the settings panel, which wins.                                        |
-| `approvalPolicy`            | `untrusted` / `on-request` (default) / `never`. Also in the settings panel.                                                                      |
-| `denyTools`                 | Hook tool names the gate always denies: `Bash`, `apply_patch`, `mcp__<server>__<tool>`, ...                                                      |
-| `hideBuiltinTools`          | Default `false`. Turn off Codex's own tools where Codex allows it (see Tools). Also in the settings panel.                                       |
-| `developerInstructions`     | Static developer instructions for every thread, ahead of valet's persona (which is added per thread, never configured here).                     |
-| `loadProjectDocs`           | Default `false`: Codex does not load the workspace's AGENTS.md (valet's persona already has it). `true` leaves Codex's default.                  |
-| `ignoreGlobalAgentsMd`      | Default `false`. Hide `CODEX_HOME`'s `AGENTS.md` / `AGENTS.override.md` via bwrap (see Persona). Also in the panel.                              |
-| `reasoningSummary`          | `auto` (default) / `concise` / `detailed` / `none`: how much reasoning streams as reasoning parts.                                               |
-| `idleCloseMs`               | Default 900000. Unsubscribe idle threads and stop an unused app-server after this long; `0` never does.                                          |
-| `minRateLimitNoticePercent` | Default 80. "Approaching limit" warnings start here. Also in the settings panel.                                                                 |
-| `utilityModel`              | Default `gpt-6-luna-low`. `<model>-<effort>` works. Empty turns side jobs off. Also in the settings panel.                                       |
-| `models`                    | Replace `model/list`: `{ id, name?, contextWindow?, maxOutputTokens?, efforts?, input? }`. Needed for providers whose models Codex doesn't list. |
+Settings are this plugin's config (valet-core 12.1): the UI edits them through core, and every value applies at the next prompt or app-server start.
+(`plugins.valet-codex.config`)
 
-Sandbox, approvals and `hideBuiltinTools` are read when a thread loads (start, resume after idle), so panel changes apply then. `args`, `env` and `ignoreGlobalAgentsMd` apply when the app-server next starts.
+| Key                         | Meaning                                                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codexPath`                 | The `codex` binary. Default: `codex` on PATH, then `~/.local/bin/codex`.                                                                                                                    |
+| `args`                      | Extra `codex app-server` arguments, e.g. `["-c", "model_provider=\"my-proxy\""]`. Applied when the app-server starts.                                                                       |
+| `env`                       | Extra environment for the app-server, e.g. `{ "CODEX_HOME": "/srv/codex" }`.                                                                                                                |
+| `config`                    | Codex config sent with every thread (nested tables, as in `config.toml`). Part of the cached prefix: keep it static.                                                                        |
+| `sandbox`                   | `read-only` / `workspace-write` (default) / `danger-full-access`.                                                                                                                           |
+| `approvalPolicy`            | `untrusted` / `on-request` (default) / `never`.                                                                                                                                             |
+| `denyTools`                 | Hook tool names the gate always denies: `Bash`, `apply_patch`, `mcp__<server>__<tool>`, ...                                                                                                 |
+| `hideBuiltinTools`          | Default `false`. Turn off Codex's own tools where Codex allows it (see Tools).                                                                                                              |
+| `developerInstructions`     | Static developer instructions for every thread, ahead of valet's persona (which is added per thread, never configured here).                                                                |
+| `loadProjectDocs`           | Default `false`: Codex does not load the workspace's AGENTS.md (valet's persona already has it). `true` leaves Codex's default.                                                             |
+| `ignoreGlobalAgentsMd`      | Default `false`. Hide `CODEX_HOME`'s `AGENTS.md` / `AGENTS.override.md` via bwrap (see Persona).                                                                                            |
+| `reasoningSummary`          | `auto` (default) / `concise` / `detailed` / `none`: how much reasoning streams as reasoning parts.                                                                                          |
+| `idleCloseMs`               | Default 900000. Unsubscribe idle threads and stop an unused app-server after this long; `0` never does.                                                                                     |
+| `minRateLimitNoticePercent` | Default 80. "Approaching limit" warnings start here.                                                                                                                                        |
+| `utilityModel`              | Default `gpt-6-luna-low`. A trailing `-<effort>` still works for the utility path. Empty turns side jobs off.                                                                               |
+| `models`                    | Replace `model/list`: `{ id, name?, contextWindow?, maxOutputTokens?, efforts?, defaultEffort?, fastTier?, fastByDefault?, input? }`. Needed for providers whose models Codex doesn't list. |
+
+Sandbox, approvals and `hideBuiltinTools` are read when a thread loads (start, resume after idle), so config changes apply then. `args`, `env` and `ignoreGlobalAgentsMd` apply when the app-server next starts.
 
 ## Tests
 
