@@ -8,6 +8,7 @@ import { CodexServer } from "./server";
 import { CodexSession } from "./session";
 import {
   approvalPolicy,
+  customModels,
   hideBuiltinTools,
   ignoreGlobalAgentsMd,
   minRateLimitNoticePercent,
@@ -57,7 +58,12 @@ export function createProvider(ctx: PluginContext<CodexConfig>, spawn: Spawner =
     async (method, params) => (await server.connect()).rpc.request(method, params),
     ctx.log,
   );
-  const catalog = createCatalog(cfg, async () => (await server.connect()).rpc.request("model/list", {}));
+  const catalog = createCatalog(
+    cfg,
+    async () => (await server.connect()).rpc.request("model/list", {}),
+    Date.now,
+    () => customModels(ctx),
+  );
   // `& { icon }` until @valethq/sdk 0.3.0 (ProviderBase.icon) is published.
   const provider: AgentProvider & { readonly icon: string } = {
     kind: "agent",

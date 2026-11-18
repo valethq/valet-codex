@@ -1,6 +1,7 @@
 import type { ModelInfo } from "@valethq/sdk";
 import {
   type CodexConfig,
+  type CustomModel,
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_OUTPUT_TOKENS,
   EFFORTS,
@@ -66,16 +67,22 @@ export function createCatalog(
   cfg: () => CodexConfig | undefined,
   fetchList: () => Promise<unknown>,
   now = Date.now,
+  custom: () => CustomModel[] = () => [],
 ): ModelCatalog {
   const windows = new Map<string, number>();
   let cached: { at: number; models: ModelConfig[] } | undefined;
+  /** Custom models are appended; one that shares an id with a listed model is skipped. */
+  const withCustom = (models: ModelConfig[]) => {
+    const seen = new Set(models.map((m) => m.id));
+    return [...models, ...custom().filter((m) => !seen.has(m.id))].flatMap((m) => toModelInfos(m, windows));
+  };
   return {
     async list() {
       const configured = cfg()?.models;
-      if (configured) return configured.flatMap((m) => toModelInfos(m, windows));
+      if (configured) return withCustom(configured);
       if (!cached || now() - cached.at > LIST_TTL_MS)
         cached = { at: now(), models: fromCodex(await fetchList()) };
-      return cached.models.flatMap((m) => toModelInfos(m, windows));
+      return withCustom(cached.models);
     },
     learnWindow(model, tokens) {
       if (tokens > 0) windows.set(model, tokens);

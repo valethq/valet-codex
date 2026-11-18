@@ -34,6 +34,7 @@ test("defaults, config values, and panel overrides", async () => {
     sandbox: "read-only",
     approvalPolicy: "on-request",
     utilityModel: "gpt-6-luna-low",
+    customModels: [],
     minRateLimitNoticePercent: 80,
     hideBuiltinTools: false,
     ignoreGlobalAgentsMd: false,
@@ -67,4 +68,16 @@ test("the view shows usage and the refresh action forces a read", async () => {
   expect(await p.view?.()).toEqual([{ type: "text", text: "usage" }]);
   await p.actions?.refresh?.({});
   expect(refreshed()).toBe(1);
+});
+
+test("customModels round-trips and rejects entries without a model name", async () => {
+  const { p } = panel();
+  await p.set?.({
+    customModels: [
+      { id: " my-model ", name: "Mine" },
+      { id: "bare", name: "" },
+    ],
+  });
+  expect((await p.get?.())?.customModels).toEqual([{ id: "my-model", name: "Mine" }, { id: "bare" }]);
+  expect(() => p.set?.({ customModels: [{ id: "" }] })).toThrow("customModels");
 });

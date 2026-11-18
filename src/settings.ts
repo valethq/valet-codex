@@ -3,6 +3,7 @@ import {
   APPROVAL_POLICIES,
   type ApprovalPolicy,
   type CodexConfig,
+  type CustomModel,
   DEFAULT_UTILITY_MODEL,
   SANDBOXES,
   type Sandbox,
@@ -43,6 +44,22 @@ export function minRateLimitNoticePercent(ctx: Ctx): number {
   return typeof v === "number" && v >= 0 && v <= 100 ? v : 80;
 }
 
+/** Panel value wins over config.json. Entries without an id are dropped. */
+export function customModels(ctx: Ctx): CustomModel[] {
+  const v = ctx.storage.kv.get<unknown>("customModels") ?? ctx.config?.customModels;
+  return Array.isArray(v)
+    ? v
+        .filter(isCustomModel)
+        .map(({ id, name }) => ({ id: id.trim(), ...(name?.trim() && { name: name.trim() }) }))
+    : [];
+}
+
+const isCustomModel = (m: unknown): m is CustomModel =>
+  typeof m === "object" &&
+  m !== null &&
+  typeof (m as CustomModel).id === "string" &&
+  (m as CustomModel).id.trim() !== "";
+
 export function registerSettings(ctx: Ctx, usage: UsageService): void {
   ctx.scopes.define({ name: "settings", version: 1, cardinality: "many" });
   ctx.scopes.provide(
@@ -75,6 +92,19 @@ export function registerSettings(ctx: Ctx, usage: UsageService): void {
             title: "Utility model",
             description: "Model for small side jobs such as naming sessions. Empty turns them off.",
           },
+          customModels: {
+            type: "array",
+            title: "Custom models",
+            description: "Extra models for the picker. The model name is sent to Codex as is.",
+            items: {
+              type: "object",
+              required: ["id"],
+              properties: {
+                id: { type: "string", title: "Model name" },
+                name: { type: "string", title: "Friendly name" },
+              },
+            },
+          },
           minRateLimitNoticePercent: {
             type: "number",
             title: "Usage warning threshold (%)",
@@ -101,6 +131,7 @@ export function registerSettings(ctx: Ctx, usage: UsageService): void {
         sandbox: sandbox(ctx),
         approvalPolicy: approvalPolicy(ctx),
         utilityModel: utilityModel(ctx) ?? "",
+        customModels: customModels(ctx),
         minRateLimitNoticePercent: minRateLimitNoticePercent(ctx),
         hideBuiltinTools: hideBuiltinTools(ctx),
         ignoreGlobalAgentsMd: ignoreGlobalAgentsMd(ctx),
@@ -115,6 +146,11 @@ export function registerSettings(ctx: Ctx, usage: UsageService): void {
           throw new Error(`approvalPolicy must be one of: ${APPROVAL_POLICIES.join(", ")}`);
         if (v.utilityModel !== undefined && typeof v.utilityModel !== "string")
           throw new Error("utilityModel must be a string");
+        if (
+          v.customModels !== undefined &&
+          !(Array.isArray(v.customModels) && v.customModels.every(isCustomModel))
+        )
+          throw new Error("customModels entries need a model name");
         const min = v.minRateLimitNoticePercent;
         if (min !== undefined && (typeof min !== "number" || !(min >= 0 && min <= 100)))
           throw new Error("minRateLimitNoticePercent must be a number from 0 to 100");
@@ -126,6 +162,7 @@ export function registerSettings(ctx: Ctx, usage: UsageService): void {
           "sandbox",
           "approvalPolicy",
           "utilityModel",
+          "customModels",
           "minRateLimitNoticePercent",
           "hideBuiltinTools",
           "ignoreGlobalAgentsMd",

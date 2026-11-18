@@ -18,6 +18,12 @@ export interface ModelConfig {
   input?: ("text" | "image")[];
 }
 
+/** A model the user adds by hand; `id` goes to the harness unchanged, `name` is the picker label. */
+export interface CustomModel {
+  id: string;
+  name?: string;
+}
+
 export interface CodexConfig {
   /** Path to the `codex` binary. Default: `codex` on PATH, then ~/.local/bin/codex. */
   codexPath?: string;
@@ -60,6 +66,8 @@ export interface CodexConfig {
   utilityModel?: string;
   /** Override the model list. Unset reads `model/list` from Codex. */
   models?: ModelConfig[];
+  /** Extra picker entries added to the model list. Also in the settings panel. */
+  customModels?: CustomModel[];
 }
 
 export const DEFAULT_UTILITY_MODEL = "gpt-6-luna-low";
