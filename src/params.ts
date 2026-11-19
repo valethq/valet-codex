@@ -36,6 +36,8 @@ export interface ThreadOptions {
   cfg: CodexConfig;
   cwd: string;
   model: string;
+  /** The model's fast tier, null for standard speed; absent keeps Codex's default. */
+  serviceTier?: string | null;
   sandbox: Sandbox;
   approvalPolicy: ApprovalPolicy;
   hideBuiltinTools: boolean;
@@ -63,6 +65,7 @@ export function threadParams(o: ThreadOptions): Obj {
   return {
     cwd: o.cwd,
     model: o.model,
+    ...(o.serviceTier === undefined ? {} : { serviceTier: o.serviceTier }),
     approvalPolicy: o.approvalPolicy,
     sandbox: o.sandbox,
     config: deepMerge(

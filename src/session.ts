@@ -1,4 +1,12 @@
-import type { AgentEvent, AgentSession, Logger, ModelContent, ToolSpec, ToolSurface } from "@valethq/sdk";
+import type {
+  AgentEvent,
+  AgentSession,
+  Logger,
+  ModelContent,
+  ModelOptions,
+  ToolSpec,
+  ToolSurface,
+} from "@valethq/sdk";
 import { Channel } from "./channel";
 import {
   type ApprovalPolicy,
@@ -9,7 +17,7 @@ import {
 } from "./config";
 import { mapCompleted, mapNotification, newTurnState, type TurnState } from "./events";
 import type { Gate } from "./gate";
-import { type ModelCatalog, resolveModel } from "./models";
+import { asEffort, type ModelCatalog } from "./models";
 import { threadParams, userInput } from "./params";
 import { RpcError } from "./rpc";
 import { type CodexServer, gateActive, type ThreadListener } from "./server";
@@ -24,9 +32,12 @@ export interface SessionInit {
   gate: Gate;
   cwd: string;
   model: string;
+  effort?: string;
+  /** Fast mode (the model's fast service tier); unset leaves Codex's default tier. */
+  fast?: boolean;
   tools: ToolSurface;
   cfg(): CodexConfig;
-  /** Read at each thread load, so the settings panel applies without a restart. */
+  /** Read at each thread load, so a settings change applies without a restart. */
   flags(): { sandbox: Sandbox; approvalPolicy: ApprovalPolicy; hideBuiltinTools: boolean };
   catalog: ModelCatalog;
   log: Logger;
@@ -64,6 +75,7 @@ export class CodexSession implements AgentSession, ThreadListener {
   private pendingPersona?: string;
   private model: string;
   private effort?: Effort;
+  private fast?: boolean;
   private valetNames = new Set<string>();
   private turn?: Turn;
   private idle?: ReturnType<typeof setTimeout>;
@@ -71,9 +83,15 @@ export class CodexSession implements AgentSession, ThreadListener {
   private warned = new Set<string>();
 
   private constructor(private init: SessionInit) {
-    const { model, effort } = resolveModel(init.model);
-    this.model = model;
-    this.effort = effort;
+    this.model = init.model;
+    this.effort = asEffort(init.effort);
+    this.fast = init.fast;
+  }
+
+  /** `serviceTier` for thread and turn params: the fast tier, null for standard speed, absent for Codex's default. */
+  private tier(): { serviceTier?: string | null } {
+    if (this.fast === undefined) return {};
+    return { serviceTier: this.fast ? this.init.catalog.fastTier(this.model) : null };
   }
 
   /** Resumes `resumeId` when Codex still has it, otherwise starts a new thread. */
@@ -100,6 +118,7 @@ export class CodexSession implements AgentSession, ThreadListener {
       cfg: this.init.cfg(),
       cwd: this.init.cwd,
       model: this.model,
+      ...this.tier(),
       ...this.init.flags(),
       tools,
       gate,
@@ -168,10 +187,10 @@ export class CodexSession implements AgentSession, ThreadListener {
     this.idle.unref?.();
   }
 
-  async setModel(next: string): Promise<void> {
-    const { model, effort } = resolveModel(next);
+  async setModel(model: string, options: ModelOptions): Promise<void> {
     this.model = model;
-    this.effort = effort;
+    this.effort = asEffort(options.effort);
+    this.fast = options.fast;
   }
 
   async close(): Promise<void> {
@@ -213,6 +232,7 @@ export class CodexSession implements AgentSession, ThreadListener {
         input: items,
         model: this.model,
         ...(this.effort && { effort: this.effort }),
+        ...this.tier(),
         summary,
       });
       this.used = true;

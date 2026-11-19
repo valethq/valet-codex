@@ -9,5 +9,6 @@ export default definePlugin<CodexConfig>({
     ctx.onDispose(dispose);
     ctx.scopes.provide("inference", provider, { key: PROVIDER_KEY });
     registerSettings(ctx, usage);
+    ctx.onConfigChange(() => {}); // values are read from ctx.config at use; launch options apply when the app-server restarts
   },
 });

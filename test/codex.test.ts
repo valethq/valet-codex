@@ -154,7 +154,7 @@ test.skipIf(!available)(
 test.skipIf(!available)(
   "hideBuiltinTools leaves the model valet's tools only",
   async () => {
-    h.kv.set("hideBuiltinTools", true);
+    h.setConfig({ hideBuiltinTools: true });
     try {
       const s = await session("hidden");
       await collect(s.prompt(input("hello"), ac()));
@@ -164,7 +164,7 @@ test.skipIf(!available)(
       expect(names).not.toContain("view_image");
       await s.close();
     } finally {
-      h.kv.delete("hideBuiltinTools");
+      h.setConfig({ hideBuiltinTools: false });
     }
   },
   60_000,
