@@ -1,8 +1,11 @@
-import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { afterAll, expect, test } from "bun:test";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { hideGlobalAgents } from "../src/globalAgents";
+import { tempDirs } from "./helpers";
+
+const temp = tempDirs();
+afterAll(() => temp.cleanup());
 
 const launch = (home: string) => ({
   command: "/bin/codex",
@@ -12,13 +15,13 @@ const launch = (home: string) => ({
 });
 
 test("no global AGENTS files: launch is unchanged", () => {
-  const l = launch(mkdtempSync(join(tmpdir(), "valet-codex-home-")));
-  expect(hideGlobalAgents(l, mkdtempSync(join(tmpdir(), "valet-codex-scratch-")))).toBe(l);
+  const l = launch(temp.make("valet-codex-home-"));
+  expect(hideGlobalAgents(l, temp.make("valet-codex-scratch-"))).toBe(l);
 });
 
 test.skipIf(!Bun.which("bwrap"))("each global AGENTS file present gets an empty file mounted over it", () => {
-  const home = mkdtempSync(join(tmpdir(), "valet-codex-home-"));
-  const scratch = mkdtempSync(join(tmpdir(), "valet-codex-scratch-"));
+  const home = temp.make("valet-codex-home-");
+  const scratch = temp.make("valet-codex-scratch-");
   writeFileSync(join(home, "AGENTS.md"), "global");
   writeFileSync(join(home, "AGENTS.override.md"), "override");
   const l = hideGlobalAgents(launch(home), scratch);
