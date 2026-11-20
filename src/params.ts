@@ -69,7 +69,7 @@ export function threadParams(o: ThreadOptions): Obj {
     approvalPolicy: o.approvalPolicy,
     sandbox: o.sandbox,
     config: deepMerge(
-      deepMerge(o.cfg.loadProjectDocs ? {} : { project_doc_max_bytes: 0 }, o.cfg.config ?? {}),
+      deepMerge(o.cfg.loadProjectDocs ? {} : { project_doc_max_bytes: 0 }, configOverrides(o.cfg.config)),
       ours,
     ),
     ...(developerInstructions && { developerInstructions }),
@@ -95,4 +95,17 @@ export async function userInput(
     }),
   );
   return items.filter((b): b is UserInput => b !== undefined);
+}
+
+// spec-gap: settings v3 has no free-form object input, so overrides are a string map and JSON-looking values parse.
+export function configOverrides(config: Record<string, string> | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config ?? {})) {
+    try {
+      out[key] = JSON.parse(value);
+    } catch {
+      out[key] = value;
+    }
+  }
+  return out;
 }

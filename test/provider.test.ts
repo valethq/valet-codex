@@ -26,7 +26,7 @@ test("open: spawns app-server once, starts a thread with the gate hook trusted",
   h = fakeCtx(
     {
       developerInstructions: "Be brief.",
-      config: { model_provider: "x", features: { foo: true } },
+      config: { model_provider: "x", features: '{"foo":true}' },
       args: ["--x"],
     },
     codex.spawn,
