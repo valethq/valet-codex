@@ -1,11 +1,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ToolSurface } from "@valethq/sdk";
 import { findCodex } from "../src/spawn";
 import { fakeResponses } from "./fake-responses";
-import { collect, fakeCtx, input, open, textOf } from "./helpers";
+import { collect, fakeCtx, input, open, tempDirs, textOf } from "./helpers";
 
 // The real `codex app-server` against a local fake model: no account and no network needed.
 const codex = findCodex(process.env.VALET_CODEX_PATH);
@@ -18,7 +17,8 @@ const called: string[] = [];
 let verdict: (name: string, input: unknown) => { input: unknown } | { denied: string } = (_n, i) => ({
   input: i,
 });
-const work = mkdtempSync(join(tmpdir(), "valet-codex-work-"));
+const temp = tempDirs();
+const work = temp.make("valet-codex-work-");
 
 const tools: ToolSurface = {
   list: () => [
@@ -43,7 +43,7 @@ beforeAll(() => {
   model = fakeResponses();
   h = fakeCtx({
     codexPath: codex,
-    env: { CODEX_HOME: mkdtempSync(join(tmpdir(), "valet-codex-home-")) },
+    env: { CODEX_HOME: temp.make("valet-codex-home-") },
     args: [
       "-c",
       `model_providers.fake={name="fake",base_url="${model.url}",wire_api="responses"}`,
@@ -58,6 +58,8 @@ beforeAll(() => {
 afterAll(async () => {
   await h?.dispose();
   model?.stop();
+  // spec-gap: dispose kills codex without awaiting exit, and it can still write to CODEX_HOME.
+  await temp.cleanup(1000);
 });
 
 const ac = () => new AbortController().signal;
@@ -173,7 +175,7 @@ test.skipIf(!available)(
 test.skipIf(!available || !Bun.which("bwrap"))(
   "ignoreGlobalAgentsMd hides CODEX_HOME's AGENTS.md from the real app-server",
   async () => {
-    const home = mkdtempSync(join(tmpdir(), "valet-codex-home-"));
+    const home = temp.make("valet-codex-home-");
     writeFileSync(join(home, "AGENTS.md"), "GLOBAL-AGENTS-MARKER");
     const turn = async (ignore: boolean) => {
       const c = fakeCtx({

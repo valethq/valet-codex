@@ -84,14 +84,13 @@ test("a meter shows what is left and where an even pace would be", () => {
 });
 
 test("usageBlocks: reading, unavailable, and a full panel", () => {
-  expect(usageBlocks({})).toEqual([{ type: "text", text: "Reading usage...", tone: "normal" }]);
+  expect(usageBlocks({})).toEqual([{ type: "note", text: "Reading usage...", tone: "normal" }]);
   expect(usageBlocks({ snapshot: { available: false, reason: "No.", rows: [] }, at: NOW }, NOW)[0]).toEqual({
-    type: "text",
+    type: "note",
     text: "No.",
   });
   const full = usageBlocks({ snapshot: parseUsage(chatgpt, limits), at: NOW }, NOW);
-  const group = full[0] as { blocks: { type: string }[] };
-  expect(group.blocks.map((b) => b.type)).toEqual(["badge", "meter", "meter", "meter", "stat"]);
+  expect(full.map((b) => b.type)).toEqual(["badge", "meter", "meter", "meter", "stat", "note", "action"]);
   expect(JSON.stringify(full.at(-1))).toContain("refresh");
 });
 
@@ -131,7 +130,7 @@ test("createUsage reports failures and backs off", async () => {
   );
   const blocks = await usage.view();
   expect(blocks[0]).toEqual({
-    type: "text",
+    type: "note",
     text: "Could not read usage: codex account authentication required to read rate limits",
     tone: "warning",
   });

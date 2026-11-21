@@ -6,6 +6,9 @@ import type {
   RouteHandler,
   ToolSurface,
 } from "@valethq/sdk";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { CodexConfig } from "../src/config";
 import { createProvider } from "../src/provider";
 import type { Spawner } from "../src/spawn";
@@ -124,3 +127,27 @@ export const open = (h: ReturnType<typeof fakeCtx>, extra: Record<string, unknow
 
 export const textOf = (events: AgentEvent[]) =>
   events.flatMap((e) => (e.type === "text-delta" ? [e.text] : [])).join("");
+
+/** Temp dirs that a test file removes in `afterAll`; `/tmp` is RAM-backed here. */
+export function tempDirs() {
+  const made: string[] = [];
+  return {
+    make: (prefix: string) => {
+      const dir = mkdtempSync(join(tmpdir(), prefix));
+      made.push(dir);
+      return dir;
+    },
+    /** `graceMs` waits out child processes that were killed but may still write, then removes again. */
+    cleanup: async (graceMs = 0) => {
+      const dirs = made.splice(0);
+      const rm = () => {
+        for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+      };
+      rm();
+      if (graceMs > 0) {
+        await Bun.sleep(graceMs);
+        rm();
+      }
+    },
+  };
+}

@@ -6,190 +6,357 @@
   "description": "inference@1 agent provider codex over the Codex CLI app-server.",
   "valet": "^0.1.0",
   "main": "./src/index.ts",
-  "provides": ["inference@1", "settings@1"],
-  "configSchema": {
-    "type": "object",
-    "additionalProperties": false,
-    "x-icon": "openai",
-    "properties": {
-      "sandbox": {
-        "type": "string",
-        "title": "Sandbox",
-        "description": "Where Codex's own commands may write.",
-        "enum": ["read-only", "workspace-write", "danger-full-access"],
-        "enumNames": ["Read only", "Workspace write", "Full access"],
-        "default": "workspace-write",
-        "x-section": "Behaviour"
-      },
-      "approvalPolicy": {
-        "type": "string",
-        "title": "Approvals",
-        "description": "When Codex asks before running something. Requests go through valet's tool gate.",
-        "enum": ["untrusted", "on-request", "never"],
-        "enumNames": ["Untrusted commands", "When Codex asks", "Never"],
-        "default": "on-request",
-        "x-section": "Behaviour"
-      },
-      "utilityModel": {
-        "type": "string",
-        "title": "Utility model",
-        "description": "Model for small side jobs such as naming sessions; may end in an effort (gpt-6-luna-low). Empty turns them off.",
-        "default": "gpt-6-luna-low",
-        "x-section": "Behaviour"
-      },
-      "minRateLimitNoticePercent": {
-        "type": "number",
-        "title": "Usage warning threshold (%)",
-        "description": "Only warn about approaching a limit at or above this share. Hitting a limit always shows.",
-        "minimum": 0,
-        "maximum": 100,
-        "default": 80,
-        "x-section": "Behaviour"
-      },
-      "reasoningSummary": {
-        "type": "string",
-        "title": "Reasoning summary",
-        "description": "How much of Codex's reasoning streams into the chat.",
-        "enum": ["auto", "concise", "detailed", "none"],
-        "enumNames": ["Auto", "Concise", "Detailed", "None"],
-        "default": "auto",
-        "x-section": "Behaviour"
-      },
-      "hideBuiltinTools": {
-        "type": "boolean",
-        "title": "Hide built-in tools",
-        "description": "Turn off Codex's own tools (shell, view_image, web search, ...) where Codex allows it, leaving valet's.",
-        "default": false,
-        "x-section": "Tools"
-      },
-      "denyTools": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        },
-        "title": "Denied tools",
-        "description": "Tool names the gate always refuses, as Codex's hooks name them (Bash, apply_patch, mcp__srv__tool).",
-        "x-section": "Tools",
-        "x-advanced": true
-      },
-      "ignoreGlobalAgentsMd": {
-        "type": "boolean",
-        "title": "Ignore CODEX_HOME's AGENTS.md",
-        "description": "Hide the global AGENTS.md / AGENTS.override.md from Codex (valet's persona replaces it). Needs bwrap. Applies when the app-server next starts.",
-        "default": false,
-        "x-section": "Instructions"
-      },
-      "loadProjectDocs": {
-        "type": "boolean",
-        "title": "Let Codex load AGENTS.md",
-        "description": "Off by default: valet's persona already carries it, so Codex would send it twice.",
-        "default": false,
-        "x-section": "Instructions",
-        "x-advanced": true
-      },
-      "developerInstructions": {
-        "type": "string",
-        "title": "Developer instructions",
-        "description": "Static instructions for every thread, ahead of valet's persona. Part of the cached prefix.",
-        "x-widget": "textarea",
-        "x-section": "Instructions",
-        "x-advanced": true
-      },
-      "idleCloseMs": {
-        "type": "number",
-        "title": "Unload idle threads after (ms)",
-        "description": "The next prompt resumes the thread. 0 keeps them loaded.",
-        "minimum": 0,
-        "default": 900000,
-        "x-advanced": true
-      },
-      "codexPath": {
-        "type": "string",
-        "title": "Codex binary",
-        "description": "Unset: codex on PATH, then ~/.local/bin/codex. Applies when the app-server next starts.",
-        "x-advanced": true
-      },
-      "args": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        },
-        "title": "App-server arguments",
-        "description": "Extra arguments for codex app-server.",
-        "x-advanced": true
-      },
-      "env": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "string"
-        },
-        "title": "App-server environment",
-        "description": "Merged over valet's own, e.g. CODEX_HOME.",
-        "x-advanced": true
-      },
-      "config": {
-        "type": "object",
-        "title": "Codex config overrides",
-        "description": "Sent with every thread as dotted keys or nested tables, e.g. { \"model_provider\": \"my-proxy\" }.",
-        "x-advanced": true
-      },
-      "models": {
-        "type": "array",
-        "title": "Model list",
-        "description": "Replaces Codex's model/list. Rename or hide models on the Models page instead.",
-        "x-advanced": true,
-        "items": {
-          "type": "object",
-          "required": ["id"],
-          "additionalProperties": false,
-          "properties": {
-            "id": {
-              "type": "string",
-              "title": "Model id"
-            },
-            "name": {
-              "type": "string",
-              "title": "Name"
-            },
-            "contextWindow": {
-              "type": "number",
-              "title": "Context window"
-            },
-            "maxOutputTokens": {
-              "type": "number",
-              "title": "Max output"
-            },
-            "efforts": {
-              "type": "array",
-              "title": "Efforts",
-              "items": {
-                "type": "string",
-                "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+  "provides": ["inference@1", "settings@2"],
+  "settings": {
+    "sections": {
+      "inference": {
+        "subsections": [
+          {
+            "id": "behaviour",
+            "label": "Behaviour",
+            "items": [
+              {
+                "id": "sandbox",
+                "label": "Sandbox",
+                "summary": "Where Codex's own commands may write.",
+                "input": {
+                  "type": "select",
+                  "options": [
+                    {
+                      "value": "read-only",
+                      "label": "Read only"
+                    },
+                    {
+                      "value": "workspace-write",
+                      "label": "Workspace write"
+                    },
+                    {
+                      "value": "danger-full-access",
+                      "label": "Full access"
+                    }
+                  ],
+                  "default": "workspace-write"
+                }
+              },
+              {
+                "id": "approvalPolicy",
+                "label": "Approvals",
+                "summary": "When Codex asks before running something. Requests go through valet's tool gate.",
+                "input": {
+                  "type": "select",
+                  "options": [
+                    {
+                      "value": "untrusted",
+                      "label": "Untrusted commands"
+                    },
+                    {
+                      "value": "on-request",
+                      "label": "When Codex asks"
+                    },
+                    {
+                      "value": "never",
+                      "label": "Never"
+                    }
+                  ],
+                  "default": "on-request"
+                }
+              },
+              {
+                "id": "utilityModel",
+                "label": "Utility model",
+                "summary": "Model for small side jobs such as naming sessions; may end in an effort (gpt-6-luna-low). Empty turns them off.",
+                "input": {
+                  "type": "string",
+                  "default": "gpt-6-luna-low"
+                }
+              },
+              {
+                "id": "minRateLimitNoticePercent",
+                "label": "Usage warning threshold (%)",
+                "summary": "Only warn about approaching a limit at or above this share. Hitting a limit always shows.",
+                "input": {
+                  "type": "number",
+                  "min": 0,
+                  "max": 100,
+                  "default": 80
+                }
+              },
+              {
+                "id": "reasoningSummary",
+                "label": "Reasoning summary",
+                "summary": "How much of Codex's reasoning streams into the chat.",
+                "input": {
+                  "type": "select",
+                  "options": [
+                    {
+                      "value": "auto",
+                      "label": "Auto"
+                    },
+                    {
+                      "value": "concise",
+                      "label": "Concise"
+                    },
+                    {
+                      "value": "detailed",
+                      "label": "Detailed"
+                    },
+                    {
+                      "value": "none",
+                      "label": "None"
+                    }
+                  ],
+                  "default": "auto"
+                }
               }
-            },
-            "defaultEffort": {
-              "type": "string",
-              "title": "Default effort",
-              "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
-            },
-            "input": {
-              "type": "array",
-              "title": "Input",
-              "items": {
-                "type": "string",
-                "enum": ["text", "image"]
+            ]
+          },
+          {
+            "id": "tools",
+            "label": "Tools",
+            "items": [
+              {
+                "id": "hideBuiltinTools",
+                "label": "Hide built-in tools",
+                "summary": "Turn off Codex's own tools (shell, view_image, web search, ...) where Codex allows it, leaving valet's.",
+                "input": {
+                  "type": "bool",
+                  "default": false
+                }
+              },
+              {
+                "id": "denyTools",
+                "label": "Denied tools",
+                "summary": "Tool names the gate always refuses, as Codex's hooks name them (Bash, apply_patch, mcp__srv__tool).",
+                "input": {
+                  "type": "tags"
+                },
+                "advanced": true
               }
-            },
-            "fastTier": {
-              "type": "string",
-              "title": "Fast service tier"
-            },
-            "fastByDefault": {
-              "type": "boolean",
-              "title": "Fast by default"
-            }
+            ]
+          },
+          {
+            "id": "instructions",
+            "label": "Instructions",
+            "items": [
+              {
+                "id": "ignoreGlobalAgentsMd",
+                "label": "Ignore CODEX_HOME's AGENTS.md",
+                "summary": "Hide the global AGENTS.md / AGENTS.override.md from Codex (valet's persona replaces it). Needs bwrap. Applies when the app-server next starts.",
+                "input": {
+                  "type": "bool",
+                  "default": false
+                }
+              },
+              {
+                "id": "loadProjectDocs",
+                "label": "Let Codex load AGENTS.md",
+                "summary": "Off by default: valet's persona already carries it, so Codex would send it twice.",
+                "input": {
+                  "type": "bool",
+                  "default": false
+                },
+                "advanced": true
+              },
+              {
+                "id": "developerInstructions",
+                "label": "Developer instructions",
+                "summary": "Static instructions for every thread, ahead of valet's persona. Part of the cached prefix.",
+                "input": {
+                  "type": "code",
+                  "language": "markdown",
+                  "lines": 6
+                },
+                "advanced": true
+              }
+            ]
+          },
+          {
+            "id": "runtime",
+            "label": "Runtime",
+            "items": [
+              {
+                "id": "idleCloseMs",
+                "label": "Unload idle threads after (ms)",
+                "summary": "The next prompt resumes the thread. 0 keeps them loaded.",
+                "input": {
+                  "type": "duration",
+                  "min": 0,
+                  "default": 900000
+                },
+                "advanced": true
+              },
+              {
+                "id": "codexPath",
+                "label": "Codex binary",
+                "summary": "Unset: codex on PATH, then ~/.local/bin/codex. Applies when the app-server next starts.",
+                "input": {
+                  "type": "path",
+                  "kind": "file"
+                },
+                "advanced": true
+              },
+              {
+                "id": "args",
+                "label": "App-server arguments",
+                "summary": "Extra arguments for codex app-server.",
+                "input": {
+                  "type": "tags"
+                },
+                "advanced": true
+              },
+              {
+                "id": "env",
+                "label": "App-server environment",
+                "summary": "Merged over valet's own, e.g. CODEX_HOME.",
+                "input": {
+                  "type": "map",
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "advanced": true
+              },
+              {
+                "id": "config",
+                "label": "Codex config overrides",
+                "summary": "Sent with every thread, one dotted key per row, e.g. model_provider = my-proxy. Values that parse as JSON (numbers, true, {...}) are sent as that.",
+                "input": {
+                  "type": "map",
+                  "key": {
+                    "type": "string",
+                    "label": "Key"
+                  },
+                  "value": {
+                    "type": "string",
+                    "label": "Value"
+                  }
+                },
+                "advanced": true
+              },
+              {
+                "id": "models",
+                "label": "Model list",
+                "summary": "Replaces Codex's model/list. Rename or hide models on the Models page instead.",
+                "input": {
+                  "type": "list",
+                  "item": {
+                    "type": "group",
+                    "inputs": [
+                      {
+                        "id": "id",
+                        "type": "string",
+                        "label": "Model id",
+                        "required": true
+                      },
+                      {
+                        "id": "name",
+                        "type": "string",
+                        "label": "Name"
+                      },
+                      {
+                        "id": "contextWindow",
+                        "type": "number",
+                        "label": "Context window"
+                      },
+                      {
+                        "id": "maxOutputTokens",
+                        "type": "number",
+                        "label": "Max output"
+                      },
+                      {
+                        "id": "efforts",
+                        "type": "multiselect",
+                        "options": [
+                          {
+                            "value": "none"
+                          },
+                          {
+                            "value": "minimal"
+                          },
+                          {
+                            "value": "low"
+                          },
+                          {
+                            "value": "medium"
+                          },
+                          {
+                            "value": "high"
+                          },
+                          {
+                            "value": "xhigh"
+                          },
+                          {
+                            "value": "max"
+                          },
+                          {
+                            "value": "ultra"
+                          }
+                        ],
+                        "label": "Efforts"
+                      },
+                      {
+                        "id": "defaultEffort",
+                        "type": "select",
+                        "options": [
+                          {
+                            "value": "none"
+                          },
+                          {
+                            "value": "minimal"
+                          },
+                          {
+                            "value": "low"
+                          },
+                          {
+                            "value": "medium"
+                          },
+                          {
+                            "value": "high"
+                          },
+                          {
+                            "value": "xhigh"
+                          },
+                          {
+                            "value": "max"
+                          },
+                          {
+                            "value": "ultra"
+                          }
+                        ],
+                        "label": "Default effort"
+                      },
+                      {
+                        "id": "input",
+                        "type": "multiselect",
+                        "options": [
+                          {
+                            "value": "text"
+                          },
+                          {
+                            "value": "image"
+                          }
+                        ],
+                        "label": "Input"
+                      },
+                      {
+                        "id": "fastTier",
+                        "type": "string",
+                        "label": "Fast service tier"
+                      },
+                      {
+                        "id": "fastByDefault",
+                        "type": "bool",
+                        "label": "Fast by default"
+                      }
+                    ]
+                  }
+                },
+                "advanced": true
+              }
+            ]
           }
-        }
+        ],
+        "icon": "openai"
       }
     }
   }

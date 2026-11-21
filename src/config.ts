@@ -31,10 +31,11 @@ export interface CodexConfig {
   /** Extra environment for the app-server, e.g. { CODEX_HOME: "/srv/codex" }. Merged over valet's own. */
   env?: Record<string, string>;
   /**
-   * Codex config overrides sent with every thread (`thread/start` `config`), as dotted keys or nested tables,
-   * e.g. { model_provider: "my-proxy" }. Static per plugin config: it is part of the cached prefix.
+   * Codex config overrides sent with every thread (`thread/start` `config`), one dotted key per entry, e.g.
+   * { model_provider: "my-proxy" }. Values that parse as JSON are sent parsed. Static per plugin config: it is part
+   * of the cached prefix.
    */
-  config?: Record<string, unknown>;
+  config?: Record<string, string>;
   /** Sandbox for model-run commands. Default "workspace-write". */
   sandbox?: Sandbox;
   /** When Codex asks before running something. Requests go to valet as permission events. Default "on-request". */

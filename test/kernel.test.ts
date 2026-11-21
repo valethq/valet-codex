@@ -1,16 +1,21 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tempDirs } from "./helpers";
 
 const CORE = process.env.VALET_CORE_DIR ?? join(import.meta.dir, "..", "..", "valet-core");
 const CLI = join(CORE, "packages/core/src/cli.ts");
 const ROOT = join(import.meta.dir, "..");
 let proc: Bun.Subprocess | undefined;
-afterAll(() => proc?.kill("SIGKILL"));
+const temp = tempDirs();
+afterAll(async () => {
+  proc?.kill("SIGKILL");
+  await proc?.exited;
+  await temp.cleanup();
+});
 
 test("the real kernel loads the plugin and activates it", async () => {
-  const home = mkdtempSync(join(tmpdir(), "valet-codex-"));
+  const home = temp.make("valet-codex-");
   const server = Bun.serve({ port: 0, fetch: () => new Response("") });
   const port = server.port as number;
   await server.stop(true);

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PluginContext, SettingsPanel } from "@valethq/sdk";
+import type { PluginContext, Setting, SettingsContribution } from "@valethq/sdk";
 import type { CodexConfig } from "../src/config";
 import {
   approvalPolicy,
@@ -15,8 +15,12 @@ import {
 import type { UsageService } from "../src/usage";
 
 const ctxOf = (config: CodexConfig) => ({ config }) as unknown as PluginContext<CodexConfig>;
-const props = JSON.parse(readFileSync(join(import.meta.dir, "..", "manifest.json"), "utf8")).configSchema
-  .properties as Record<string, { default?: unknown }>;
+const manifest = JSON.parse(readFileSync(join(import.meta.dir, "..", "manifest.json"), "utf8"));
+const props: Record<string, { default?: unknown }> = Object.fromEntries(
+  (manifest.settings.sections.inference.subsections as { items: Setting[] }[])
+    .flatMap((s) => s.items)
+    .map((s) => [s.id, { default: s.input.default }]),
+);
 
 test("accessors fall back to the defaults the manifest declares", () => {
   const ctx = ctxOf({});
@@ -37,26 +41,33 @@ test("config values win; values outside the enums fall back; an empty utility mo
   expect(sandbox(ctxOf({ sandbox: "yolo" as never }))).toBe("workspace-write");
 });
 
-test("the settings page carries usage: view and refresh action, no form", async () => {
-  let provided: SettingsPanel | undefined;
+test("settings@2 carries plan usage as a runtime subsection with a refresh action", async () => {
+  let provided: SettingsContribution | undefined;
   const ctx = {
     config: {},
     scopes: {
       define() {},
-      provide: (_name: string, p: SettingsPanel) => {
+      provide: (_name: string, p: SettingsContribution) => {
         provided = p;
       },
     },
   };
   let refreshed = 0;
   const usage: UsageService = {
-    view: async () => [{ type: "text", text: "usage" }],
+    view: async () => [{ type: "note", text: "usage" }],
     refresh: async () => void refreshed++,
     update() {},
   };
   registerSettings(ctx as never, usage);
-  expect(provided?.schema).toBeUndefined();
-  expect(await provided?.view?.()).toEqual([{ type: "text", text: "usage" }]);
+  expect(await provided?.subsections?.()).toEqual([
+    {
+      id: "usage",
+      label: "Plan usage",
+      order: -1,
+      refreshMs: 15_000,
+      items: [{ type: "note", text: "usage" }],
+    },
+  ]);
   await provided?.actions?.refresh?.({});
   expect(refreshed).toBe(1);
 });

@@ -1,7 +1,7 @@
 import type { PluginContext, UtilityModel } from "@valethq/sdk";
 import type { CodexConfig } from "./config";
 import { resolveModel } from "./models";
-import { BUILTIN_TOOL_FEATURES, deepMerge } from "./params";
+import { BUILTIN_TOOL_FEATURES, configOverrides, deepMerge } from "./params";
 import type { CodexServer } from "./server";
 import { utilityModel } from "./settings";
 
@@ -24,7 +24,13 @@ export function createUtility(ctx: PluginContext<CodexConfig>, server: CodexServ
         approvalPolicy: "never",
         sandbox: "read-only",
         baseInstructions: req.system,
-        config: deepMerge(ctx.config?.config ?? {}, { features: off, web_search: "disabled" }),
+        config: deepMerge(
+          deepMerge(
+            ctx.config?.loadProjectDocs ? {} : { project_doc_max_bytes: 0 },
+            configOverrides(ctx.config?.config),
+          ),
+          { features: off, web_search: "disabled" },
+        ),
         serviceName: "valet",
       });
       const threadId = thread.thread.id;

@@ -1,4 +1,4 @@
-import type { AgentEvent, SettingsBlock, SettingsTone } from "@valethq/sdk";
+import type { AgentEvent, Display, SettingsTone } from "@valethq/sdk";
 
 /** Pace within this many points of an even burn-down counts as "on pace". */
 const PACE_SLACK = 5;
@@ -120,7 +120,7 @@ const tone = (percent: number): SettingsTone =>
   percent >= 95 ? "critical" : percent >= 80 ? "warning" : "normal";
 
 /** One meter per window: the bar shows what is left, the marker where an even burn-down would be by now. */
-export function usageMeter(r: UsageRow, now: number): SettingsBlock {
+export function usageMeter(r: UsageRow, now: number): Display {
   const used = Math.round(r.percent);
   const left = 100 - used;
   const remaining = r.resetsAt === undefined ? 0 : Math.max(0, r.resetsAt - now);
@@ -154,46 +154,37 @@ export interface UsageState {
 
 const clock = (t: number) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-export function usageBlocks(s: UsageState, now = Date.now()): SettingsBlock[] {
-  const out: SettingsBlock[] = [];
+export function usageBlocks(s: UsageState, now = Date.now()): Display[] {
+  const out: Display[] = [];
   const snap = s.snapshot;
   if (!snap) {
     out.push({
-      type: "text",
+      type: "note",
       text: s.error ? `Could not read usage: ${s.error}` : "Reading usage...",
       tone: s.error ? "warning" : "normal",
     });
   } else if (!snap.available) {
-    out.push({ type: "text", text: snap.reason ?? "Plan limits are not available for this login." });
+    out.push({ type: "note", text: snap.reason ?? "Plan limits are not available for this login." });
   } else {
-    out.push({
-      type: "group",
-      title: "Plan usage",
-      blocks: [
-        ...(snap.plan ? [{ type: "badge" as const, text: capitalize(snap.plan) }] : []),
-        ...(snap.reached
-          ? [{ type: "badge" as const, text: "Limit reached", tone: "critical" as const }]
-          : []),
-        ...snap.rows.map((r) => usageMeter(r, now)),
-        ...(snap.credits ? [{ type: "stat" as const, label: "Credits", value: snap.credits }] : []),
-      ],
-    });
-    if (s.error) out.push({ type: "text", text: `Could not refresh usage: ${s.error}`, tone: "warning" });
+    out.push(
+      ...(snap.plan ? [{ type: "badge" as const, text: capitalize(snap.plan) }] : []),
+      ...(snap.reached ? [{ type: "badge" as const, text: "Limit reached", tone: "critical" as const }] : []),
+      ...snap.rows.map((r) => usageMeter(r, now)),
+      ...(snap.credits ? [{ type: "stat" as const, label: "Credits", value: snap.credits }] : []),
+    );
+    if (s.error) out.push({ type: "note", text: `Could not refresh usage: ${s.error}`, tone: "warning" });
   }
   if (snap || s.error)
-    out.push({
-      type: "group",
-      layout: "row",
-      blocks: [
-        ...(s.at === undefined ? [] : [{ type: "text" as const, text: `Updated ${clock(s.at)}` }]),
-        { type: "button", label: "Refresh now", action: "refresh" },
-      ],
+    out.push(...(s.at === undefined ? [] : [{ type: "note" as const, text: `Updated ${clock(s.at)}` }]), {
+      type: "action",
+      text: "Refresh now",
+      action: "refresh",
     });
   return out;
 }
 
 export interface UsageService {
-  view(): Promise<SettingsBlock[]>;
+  view(): Promise<Display[]>;
   refresh(force?: boolean): Promise<void>;
   /** Folds an `account/rateLimits/updated` snapshot into the cached reading. */
   update(snapshot: unknown): void;
