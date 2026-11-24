@@ -2,7 +2,7 @@
 
 `inference@1` agent provider `codex`, built on the Codex CLI's app-server (`codex app-server`, JSON-RPC over stdio).
 
-A [valet](https://github.com/valethq/valet-core) plugin and a sibling of `valet-claudecode`: Codex runs the loop and its own tools, and valet mirrors the stream into messages and parts. It authenticates as whoever is signed in to `codex` on the host (ChatGPT or API key), or uses any model provider configured for Codex, so there is no key in valet.
+A [valet](https://github.com/valethq/valet-core) plugin: Codex runs the loop and its own tools, and valet mirrors the stream into messages and parts. It authenticates as whoever is signed in to `codex` on the host (ChatGPT or API key), or uses any model provider configured for Codex, so there is no key in valet.
 
 Imports `@valethq/sdk` only and has no runtime dependencies: it spawns the installed `codex` binary. Checked against Codex CLI 0.169.0.
 
@@ -29,7 +29,7 @@ Imports `@valethq/sdk` only and has no runtime dependencies: it spawns the insta
 - **It is verified.** Codex skips hooks that are not trusted. The plugin defines the hook at process level (`-c hooks.PreToolUse=...`) only to read its trust hash from `hooks/list`, then sends the hook and a `hooks.state` trust entry with every thread. A thread's `hooks` table replaces the process-level one, so a thread without both would run ungated. After each thread start the plugin asks `hooks/list` for that thread, and a thread where the hook is not enabled and trusted is unsubscribed and refused. Nothing is written to `~/.codex`.
 - Coverage is Codex's: shell (`Bash`), `apply_patch`, MCP tools and other local function tools. Hosted tools such as web search don't go through hooks. Subagent hooks carry the parent thread id, so they map to the same session; that path was not exercised here (it needs a model that spawns subagents).
 
-**Approvals.** With `approvalPolicy` `on-request` (default) or `untrusted`, Codex's approval requests (`item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval`) become valet `permission` events, which valet-agent answers through the `tool.call` gate. MCP elicitations are declined. `request_user_input` gets no answers, since an agent provider can't ask the user mid-turn.
+**Approvals.** With `approvalPolicy` `on-request` (default) or `untrusted`, Codex's approval requests (`item/commandExecution/requestApproval`, `item/fileChange/requestApproval`, `item/permissions/requestApproval`) become valet `permission` events, which are answered through the `tool.call` gate. MCP elicitations are declined. `request_user_input` gets no answers, since an agent provider can't ask the user mid-turn.
 
 **`hideBuiltinTools`** turns off the Codex features that add tools (shell, unified exec, `view_image`, multi-agent, goals, image generation, apps, browser and computer use, tool suggestions) and web search. Codex has no switch for everything: on code-mode models (`gpt-6.x`) `apply_patch`, the MCP resource helpers and the code-mode collaboration tools stay. The gate still covers them, and `denyTools: ["apply_patch"]` blocks edits outright.
 
