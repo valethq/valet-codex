@@ -602,7 +602,7 @@ test("configured models replace model/list", async () => {
 
 test("the utility model runs one turn on an ephemeral tool-free thread", async () => {
   const codex = new FakeCodex(say(" A Title "));
-  h = fakeCtx({ utilityModel: "gpt-6-luna-low" }, codex.spawn);
+  h = fakeCtx({ utilityModel: { model: "gpt-6-luna", effort: "low" } }, codex.spawn);
   const out = await h.provider.utility?.complete({ system: "Name it.", prompt: "chat" }, ac());
   expect(out).toBe("A Title");
   const start = codex.calls("thread/start")[0] as Record<string, unknown>;

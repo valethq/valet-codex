@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createCatalog, fromCodex, resolveModel } from "../src/models";
+import { createCatalog, fromCodex } from "../src/models";
 
 test("fromCodex keeps known efforts and takes the first service tier as fast mode", () => {
   expect(
@@ -37,8 +37,4 @@ test("the catalog knows each model's fast tier, defaulting to priority", async (
   ]);
   expect(catalog.fastTier("a")).toBe("turbo");
   expect(catalog.fastTier("b")).toBe("priority");
-});
-
-test("resolveModel still splits the utility model's effort", () => {
-  expect(resolveModel("gpt-6-luna-low")).toEqual({ model: "gpt-6-luna", effort: "low" });
 });

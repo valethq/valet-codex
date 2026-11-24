@@ -1,6 +1,5 @@
 import type { PluginContext, UtilityModel } from "@valethq/sdk";
 import type { CodexConfig } from "./config";
-import { resolveModel } from "./models";
 import { BUILTIN_TOOL_FEATURES, configOverrides, deepMerge } from "./params";
 import type { CodexServer } from "./server";
 import { utilityModel } from "./settings";
@@ -10,11 +9,11 @@ type Obj = Record<string, unknown>;
 /** Side jobs run as one turn on an ephemeral, tool-free thread whose system prompt is the job's own. */
 export function createUtility(ctx: PluginContext<CodexConfig>, server: CodexServer): UtilityModel {
   return {
-    model: () => utilityModel(ctx),
+    model: () => utilityModel(ctx)?.model,
     async complete(req, signal) {
       const picked = utilityModel(ctx);
       if (!picked) throw new Error("no utility model is configured");
-      const { model, effort } = resolveModel(picked);
+      const { model, effort } = picked;
       const { rpc } = await server.connect();
       const off = Object.fromEntries(BUILTIN_TOOL_FEATURES.map((f) => [f, false]));
       const thread = await rpc.request<{ thread: { id: string } }>("thread/start", {

@@ -8,7 +8,7 @@ export default definePlugin<CodexConfig>({
     const { provider, usage, dispose } = createProvider(ctx);
     ctx.onDispose(dispose);
     ctx.scopes.provide("inference", provider, { key: PROVIDER_KEY });
-    registerSettings(ctx, usage);
+    registerSettings(ctx, usage, () => provider.listModels());
     ctx.onConfigChange(() => {}); // values are read from ctx.config at use; launch options apply when the app-server restarts
   },
 });

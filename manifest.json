@@ -36,7 +36,8 @@
                       "label": "Full access"
                     }
                   ],
-                  "default": "workspace-write"
+                  "default": "workspace-write",
+                  "style": "cards"
                 }
               },
               {
@@ -59,28 +60,78 @@
                       "label": "Never"
                     }
                   ],
-                  "default": "on-request"
+                  "default": "on-request",
+                  "style": "cards"
                 }
               },
               {
                 "id": "utilityModel",
                 "label": "Utility model",
-                "summary": "Model for small side jobs such as naming sessions; may end in an effort (gpt-6-luna-low). Empty turns them off.",
+                "summary": "Model and effort for small side jobs such as naming sessions. No model turns them off.",
                 "input": {
-                  "type": "string",
-                  "default": "gpt-6-luna-low"
-                }
+                  "type": "group",
+                  "layout": "row",
+                  "inputs": [
+                    {
+                      "id": "model",
+                      "type": "ref",
+                      "label": "Model",
+                      "placeholder": "Off",
+                      "options": {
+                        "from": "models"
+                      }
+                    },
+                    {
+                      "id": "effort",
+                      "type": "select",
+                      "label": "Effort",
+                      "options": {
+                        "from": "efforts",
+                        "args": {
+                          "model": {
+                            "$": "utilityModel.model"
+                          }
+                        }
+                      },
+                      "when": {
+                        "set": "utilityModel.model"
+                      }
+                    }
+                  ],
+                  "default": {
+                    "model": "gpt-6-luna",
+                    "effort": "low"
+                  }
+                },
+                "migrate": [
+                  {
+                    "map": {
+                      "match": "^\\s*(?<model>.*?)(?:-(?<effort>low|medium|high|xhigh|max|minimal|none|ultra))?\\s*$"
+                    }
+                  }
+                ]
               },
               {
-                "id": "minRateLimitNoticePercent",
-                "label": "Usage warning threshold (%)",
+                "id": "rateLimitNoticeAt",
+                "label": "Usage warning threshold",
                 "summary": "Only warn about approaching a limit at or above this share. Hitting a limit always shows.",
                 "input": {
-                  "type": "number",
+                  "type": "percent",
                   "min": 0,
-                  "max": 100,
-                  "default": 80
-                }
+                  "max": 1,
+                  "step": 0.05,
+                  "style": "slider",
+                  "default": 0.8
+                },
+                "keywords": ["rate limit", "usage"],
+                "migrate": [
+                  {
+                    "from": "minRateLimitNoticePercent",
+                    "map": {
+                      "scale": 0.01
+                    }
+                  }
+                ]
               },
               {
                 "id": "reasoningSummary",

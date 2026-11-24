@@ -5,7 +5,7 @@ export type ApprovalPolicy = "untrusted" | "on-request" | "never";
 export const APPROVAL_POLICIES: readonly ApprovalPolicy[] = ["untrusted", "on-request", "never"];
 
 /** Every effort Codex models report (`model/list` supportedReasoningEfforts), lowest first. */
-export const EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"] as const;
+export const EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 export type Effort = (typeof EFFORTS)[number];
 
 export interface ModelConfig {
@@ -60,15 +60,18 @@ export interface CodexConfig {
   reasoningSummary?: "auto" | "concise" | "detailed" | "none";
   /** Unsubscribe from an idle thread after this long; the next prompt resumes it. 0 disables. Default 15 min. */
   idleCloseMs?: number;
-  /** Hide "approaching limit" warnings below this percent used (0-100). Default 80. */
-  minRateLimitNoticePercent?: number;
+  /** Hide "approaching limit" warnings below this percent used as a share (0-1). Default 0.8. */
+  rateLimitNoticeAt?: number;
   /** Model for small side jobs such as session naming. Empty string turns them off. */
-  utilityModel?: string;
+  utilityModel?: { model?: string; effort?: Effort };
   /** Override the model list. Unset reads `model/list` from Codex. */
   models?: ModelConfig[];
 }
 
-export const DEFAULT_UTILITY_MODEL = "gpt-6-luna-low";
+export const DEFAULT_UTILITY_MODEL: { model: string; effort?: Effort } = {
+  model: "gpt-6-luna",
+  effort: "low",
+};
 export const DEFAULT_IDLE_CLOSE_MS = 15 * 60_000;
 /** Codex does not report a window in `model/list`; this is used until a turn reports `modelContextWindow`. */
 export const DEFAULT_CONTEXT_WINDOW = 272_000;

@@ -51,7 +51,7 @@ beforeAll(() => {
       'model_provider="fake"',
     ],
     models: [{ id: "test-model" }],
-    utilityModel: "test-model",
+    utilityModel: { model: "test-model" },
   });
 });
 

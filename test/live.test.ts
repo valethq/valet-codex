@@ -11,7 +11,7 @@ test.skipIf(process.env.VALET_LIVE_CODEX !== "1")(
     const h = fakeCtx({
       idleCloseMs: 0,
       models: [{ id: model }],
-      utilityModel: model,
+      utilityModel: { model },
       ...(process.env.VALET_LIVE_CODEX_ARGS && { args: JSON.parse(process.env.VALET_LIVE_CODEX_ARGS) }),
     });
     try {
